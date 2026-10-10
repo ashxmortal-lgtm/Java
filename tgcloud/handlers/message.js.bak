@@ -1,0 +1,155 @@
+import { runBackup } from "../lib/backup.js";
+import { api, BotApiError } from 'sdk';
+import {
+  claimDaily, DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA,
+  SAKURA_COINS, SAKURA_CHAKRA,
+} from '../lib/economy.js';
+import { welcome, render, style, escapeHtml, COIN } from '../lib/texts.js';
+import { screenText, screenKeyboard, fmt } from '../lib/store.js';
+import { handleBuy } from '../lib/buy.js';
+import { inventoryText } from '../lib/inventory.js';
+import { addCoins, OWNER_ID } from '../lib/admin.js';
+import { runActivity, sweepActivities } from '../lib/activities.js';
+import { grantStarter, STARTER_NOTICE } from '../lib/starter.js';
+import { balanceText, trackGroup } from '../lib/balance.js';
+import { abilityHtml, abilityText, abilityKeyboard } from '../lib/ability.js';
+import { helpText } from '../lib/help.js';
+import { send, sendRich, sweepMessages, trackUser } from '../lib/chat.js';
+
+const BOT_USERNAME = 'exfrozen_bot';
+
+function reply(message, body, extra = {}) {
+  return send(message.chat.id, {
+    text: render(message.from, body),
+    parse_mode: 'HTML',
+    ...extra,
+  });
+}
+
+function claimBody(r) {
+  const bar = '●'.repeat(r.streak) + '○'.repeat(7 - r.streak);
+  if (!r.claimed) {
+    return `⏳ 𝐀𝐋𝐑𝐄𝐀𝐃𝐘 𝐂𝐋𝐀𝐈𝐌𝐄𝐃\n\nCome back after 12:00 AM IST.\n\nStreak: ${r.streak}/7  ${bar}\nBalance: ${fmt(r.balance)} 🍥`;
+  }
+  let s = `✅ 𝐃𝐀𝐈𝐋𝐘 𝐂𝐋𝐀𝐈𝐌\n\n+${fmt(DAILY_COINS)} ${COIN}\n+chakra x ${DAILY_CHAKRA} ⚡`;
+  if (r.sakura) {
+    s += `\n\n🌸 𝐒𝐀𝐊𝐔𝐑𝐀 𝐁𝐎𝐎𝐒𝐓\n+${fmt(SAKURA_COINS)} ${COIN}\n+chakra x ${SAKURA_CHAKRA} ⚡`;
+  }
+  if (r.bonus) {
+    s += `\n\n🎉 𝐃𝐀𝐘 𝟕 𝐁𝐎𝐍𝐔𝐒\n+${fmt(BONUS_COINS)} ${COIN}\n+chakra x ${BONUS_CHAKRA} ⚡`;
+  }
+  s += `\n\nStreak: ${r.streak}/7  ${bar}\nBalance: ${fmt(r.balance)} 🍥`;
+  if (r.chakraFailed) s += `\n\n⚠️ Chakra couldn't be added. Contact the owner.`;
+  return s;
+}
+
+// Finished missions/patrols: group reminder + short DM.
+async function announceDone() {
+  for (const r of await sweepActivities()) {
+    const who = { id: r.id, first_name: r.name };
+    if (r.chatId && r.chatId < 0) {
+      try {
+        await send(r.chatId, { text: render(who, r.reminder), parse_mode: 'HTML' });
+      } catch (e) { console.error(e); }
+    }
+    try {
+      await send(r.id, { text: render(who, r.dm), parse_mode: 'HTML' });
+    } catch (e) { /* user never started the bot in DM */ }
+  }
+}
+
+export default async function (message, ctx) {
+  // No scheduler: cleanup and reminders run on every incoming message.
+  try { await sweepMessages(); } catch (e) { console.error(e); }
+  try { await announceDone(); } catch (e) { console.error(e); }
+
+  const text = message.text;
+  const user = message.from;
+  if (!text || !text.startsWith('/') || !user || user.is_bot) return;
+
+  const head = text.split(/\s+/)[0].slice(1);
+  const [rawCmd, target] = head.split('@');
+  if (target && target.toLowerCase() !== BOT_USERNAME) return;
+  const cmd = rawCmd.toLowerCase();
+
+  try {
+    try { await trackUser(user); } catch (e) { console.error(e); }
+    try { await trackGroup(message); } catch (e) { console.error(e); }
+    let starterNew = false;
+    try { starterNew = await grantStarter(user); } catch (e) { console.error(e); }
+    if (starterNew) await reply(message, STARTER_NOTICE);
+
+    if (cmd === 'start') {
+      await reply(message, welcome());
+    } else if (cmd === 'help') {
+      await reply(message, helpText(user));
+    } else if (cmd === 'ability' || cmd === 'abilities') {
+      const markup = abilityKeyboard(user.id);
+      try {
+        await sendRich(message.chat.id, {
+          rich_message: { html: abilityHtml(user) },
+          reply_markup: markup,
+        });
+      } catch (e) {
+        if (!(e instanceof BotApiError)) throw e;
+        console.error(e); // rich table refused: classic layout instead
+        await reply(message, abilityText(), { reply_markup: markup });
+      }
+    } else if (cmd === 'shinobi_store') {
+      await reply(message, screenText('main'), {
+        reply_markup: screenKeyboard('main', user.id),
+      });
+    } else if (cmd === 'mission' || cmd === 'patrol') {
+      if (message.chat.type === 'private') {
+        await reply(message, `「𝐆𝐑𝐎𝐔𝐏 𝐂𝐎𝐌𝐌𝐀𝐍𝐃」\n\n/${cmd} works in groups only.\n\n» Use it in a group where I am a member.`);
+      } else {
+        const arg = text.trim().split(/\s+/).slice(1).join(' ');
+        const r = await runActivity(user, cmd, arg || null, message.chat.id);
+        await send(message.chat.id, {
+          text: style(r.body),
+          parse_mode: 'HTML',
+          reply_parameters: { message_id: message.message_id },
+        });
+        for (const d of r.dms) {
+          try {
+            await send(user.id, { text: render(user, d), parse_mode: 'HTML' });
+          } catch (e) { /* user never started the bot in DM */ }
+        }
+      }
+    } else if (cmd === 'buy') {
+      const body = await handleBuy(user, text, ctx?.update?.update_id);
+      if (body) {
+        await reply(message, body, {
+          reply_parameters: { message_id: message.message_id },
+        });
+      }
+    } else if (cmd === 'addcoins') {
+      if (user.id !== OWNER_ID) return;
+      await reply(message, await addCoins(message, text));
+    } else if (cmd === 'inventory') {
+      await reply(message, await inventoryText(user.id));
+    } else if (cmd === 'claim' || cmd === 'daily') {
+      if (message.chat.type !== 'private') {
+        await reply(message, `Please use /Claim in the bot's DM: @${BOT_USERNAME}`);
+        return;
+      }
+      await reply(message, claimBody(await claimDaily(user.id)));
+    } else if (cmd === 'balance') {
+      await send(message.chat.id, {
+        text: style(await balanceText(message)),
+        parse_mode: 'HTML',
+      });
+    } else if (cmd === 'profile') {
+      await reply(message, 'Coming soon.');
+    }
+  } catch (e) {
+    console.error(e);
+    if (!(e instanceof BotApiError)) {
+      let msg = 'Something went wrong. Try again later.';
+      if (user.id === OWNER_ID) {
+        msg += `\n\n<code>${escapeHtml(String(e && e.message ? e.message : e).replace(/\s+/g, ' ').slice(0, 300))}</code>`;
+      }
+      try { await reply(message, msg); } catch (_) {}
+    }
+  }
+}
