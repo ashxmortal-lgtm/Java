@@ -3,7 +3,8 @@
  * Pets omitted. Does not touch non-map handlers.
  */
 
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from '../message_api.js';
 import { db } from 'sdk';
 import { sql } from 'sdk/db';
 import { mention, style, escapeHtml } from '../texts.js';

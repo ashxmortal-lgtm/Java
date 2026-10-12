@@ -3,7 +3,8 @@
  * Prefer editMessageMedia when we have a cached file_id; else copyMessage.
  */
 
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from '../message_api.js';
 import { db } from 'sdk';
 import { sql } from 'sdk/db';
 import {

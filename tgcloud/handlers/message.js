@@ -1,6 +1,6 @@
 import { handleStudyCommand } from "../lib/study/router.js";
 import { handleTopicCommand, handleTopicText } from '../lib/topic.js';
-import { api } from 'sdk';
+import { api } from '../lib/message_api.js';
 import { menus } from '../lib/hnc.js';
 import { handleEconomyCommand } from '../lib/economy_handler.js';
 import { handleGroupAdminCommand } from '../lib/groupadmin.js';

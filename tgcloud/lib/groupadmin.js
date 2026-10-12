@@ -1,4 +1,5 @@
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { eq, and, lt } from 'sdk/db';
 import { groupAdmins as GA, adminConfirmations as AC, groupSettings as GS } from '../schema.js';
 import { OWNER_ID } from './config.js';

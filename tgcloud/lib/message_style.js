@@ -1,0 +1,64 @@
+import { style } from './texts.js';
+
+const TEXT_FIELDS = new Set([
+  'text', 'caption', 'question', 'explanation', 'description', 'title', 'label',
+]);
+const BUTTON_LIST_FIELDS = new Set(['inline_keyboard', 'keyboard', 'buttons']);
+const BUTTON_ACTION_FIELDS = new Set([
+  'callback_data', 'url', 'login_url', 'web_app', 'switch_inline_query',
+  'switch_inline_query_current_chat', 'switch_inline_query_chosen_chat',
+  'switch_inline_query_inline', 'switch_inline_query_business', 'request_contact',
+  'request_location', 'request_poll', 'request_users', 'request_chat',
+  'copy_text', 'callback_game', 'pay',
+]);
+const TEXT_TYPES_TO_PRESERVE = new Set([
+  'code', 'pre', 'text_link', 'text_url', 'text_mention',
+]);
+
+function styleRichHtml(html) {
+  return style(html).replace(/<tg-button\b([^>]*)>/gi, (_tag, attrs) => {
+    const withoutExistingStyle = attrs.replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, '');
+    return `<tg-button${withoutExistingStyle} style="primary">`;
+  });
+}
+
+function transform(value, key = '', parentType = '', inButtonList = false) {
+  if (typeof value === 'string') {
+    if (key === 'reply_markup') {
+      try {
+        return JSON.stringify(transform(JSON.parse(value), key, parentType, inButtonList));
+      } catch (_) {
+        return value;
+      }
+    }
+    if (key === 'html') return styleRichHtml(value);
+    if (TEXT_FIELDS.has(key) && !TEXT_TYPES_TO_PRESERVE.has(parentType)) {
+      return style(value);
+    }
+    return value;
+  }
+  if (!value || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => transform(item, key, parentType, inButtonList));
+  }
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return value;
+
+  const type = typeof value.type === 'string' ? value.type : parentType;
+  const buttonList = inButtonList || BUTTON_LIST_FIELDS.has(key);
+  const button = typeof value.text === 'string'
+    && (buttonList || [...BUTTON_ACTION_FIELDS].some((field) => field in value));
+  const result = {};
+  for (const [childKey, childValue] of Object.entries(value)) {
+    result[childKey] = transform(childValue, childKey, type, buttonList);
+  }
+  if (button) {
+    result.text = style(value.text);
+    result.style = 'primary';
+  }
+  return result;
+}
+
+export function styleOutgoingPayload(payload) {
+  return transform(payload);
+}

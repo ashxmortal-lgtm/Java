@@ -1,4 +1,5 @@
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { style, escapeHtml } from './texts.js';
 import { SHINOBI, JUTSU, CHAKRA_RATE, boldNum } from './store.js';
 import { ROWS } from './ability.js';

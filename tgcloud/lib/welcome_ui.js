@@ -1,4 +1,5 @@
-import { api, BotApiError, db } from 'sdk';
+import { BotApiError, db } from 'sdk';
+import { api } from './message_api.js';
 import { eq } from 'sdk/db';
 import { OWNER_ID } from './config.js';
 import { listCommands } from './command_registry.js';

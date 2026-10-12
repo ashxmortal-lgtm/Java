@@ -1,4 +1,5 @@
-import { api, db } from 'sdk';
+import { db } from 'sdk';
+import { api } from './message_api.js';
 import { eq } from 'sdk/db';
 import { quizTopicSuggestions as Q, quizSuggestionSessions as SS, topicSettings as ST } from '../schema.js';
 import { ADMIN_IDS, STORAGE_CHAT_ID, SUGGEST_TTL } from './topic_config.js';

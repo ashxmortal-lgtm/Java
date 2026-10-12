@@ -1,7 +1,8 @@
 // Economy commands + store/level-up buttons, restored from the old handlers.
 // /start /help /claim /balance /inventory /shinobi_store /buy /mission /patrol /ability /addcoins /backup
 import { runBackup, runFullBackup } from "./backup.js";
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import {
   claimDaily, DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA,
   SAKURA_COINS, SAKURA_CHAKRA,

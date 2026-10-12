@@ -2,7 +2,8 @@
  * Rich Message helpers for Game Hub (Bot API 10.3+).
  * Buttons via <tg-button-row> / <tg-button type="callback_data">.
  */
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from '../message_api.js';
 import { escapeHtml, style, mention } from '../texts.js';
 
 function btnLabel(text) {

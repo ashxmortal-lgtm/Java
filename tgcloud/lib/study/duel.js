@@ -1,4 +1,5 @@
-import { api, db } from 'sdk';
+import { db } from 'sdk';
+import { api } from '../message_api.js';
 import { eq, sql } from 'sdk/db';
 import { study_duels as D } from '../../schema.js';
 import { mention, userTag, plainName, nowIso, istNow, sendBlocks, editBlocks, rp, parseTime, hhmm, nextDate, head, para, bold, divider, quoteText, code, row, btn } from './common.js';
