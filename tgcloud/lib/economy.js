@@ -1,0 +1,62 @@
+import { db } from 'sdk';
+import { eq, sql } from 'sdk/db';
+import { users } from '../schema.js';
+
+export const DAILY_COINS = 500;
+export const DAILY_CHAKRA = 100;
+export const BONUS_COINS = 1000;   // day 7
+export const BONUS_CHAKRA = 200;   // day 7
+export const SAKURA_COINS = 100;   // Sakura owners
+export const SAKURA_CHAKRA = 50;
+
+// IST = UTC + 5:30, no daylight saving.
+const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
+
+export function dayKey(offsetDays = 0) {
+  return new Date(Date.now() + IST_OFFSET_MS + offsetDays * 86400000)
+    .toISOString().slice(0, 10);
+}
+export const todayKey = () => dayKey(0);
+
+export async function getBalance(telegramId) {
+  const row = await db.select().from(users)
+    .where(eq(users.telegramId, telegramId)).get();
+  return row ? row.balance : 0;
+}
+
+export async function claimDaily(id) {
+  const today = dayKey(0);
+  const yesterday = dayKey(-1);
+  await db.run(sql`INSERT OR IGNORE INTO users (telegram_id, balance) VALUES (${id}, 0)`);
+
+  const row = await db.get(sql`SELECT last_claim_date AS d, claim_streak AS s FROM users WHERE telegram_id = ${id}`);
+  const d = row ? row.d : null;
+  const s = row ? row.s : 0;
+  if (d === today) return { claimed: false, streak: s, balance: await getBalance(id) };
+
+  const streak = d === yesterday ? (s % 7) + 1 : 1;
+  const bonus = streak === 7;
+  const sak = await db.get(sql`SELECT 1 AS x FROM inventory WHERE telegram_id = ${id} AND item_name = 'Sakura'`);
+  const sakura = !!sak;
+  const coins = DAILY_COINS + (bonus ? BONUS_COINS : 0) + (sakura ? SAKURA_COINS : 0);
+  const chakra = DAILY_CHAKRA + (bonus ? BONUS_CHAKRA : 0) + (sakura ? SAKURA_CHAKRA : 0);
+
+  // One guarded statement: only the first request of the day pays.
+  const res = await db.run(sql`UPDATE users SET balance = balance + ${coins}, last_claim_date = ${today}, claim_streak = ${streak} WHERE telegram_id = ${id} AND (last_claim_date IS NULL OR last_claim_date != ${today})`);
+  if (res.rowsAffected === 0) {
+    return { claimed: false, streak, balance: await getBalance(id) };
+  }
+
+  let chakraFailed = false;
+  for (let i = 0; i < 2; i++) {
+    try {
+      await db.run(sql`INSERT INTO inventory (telegram_id, item_type, item_name, qty) VALUES (${id}, 'chakra', 'Chakra', ${chakra}) ON CONFLICT(telegram_id, item_name) DO UPDATE SET qty = qty + ${chakra}`);
+      chakraFailed = false;
+      break;
+    } catch (e) {
+      console.error(e);
+      chakraFailed = true;
+    }
+  }
+  return { claimed: true, streak, bonus, sakura, coins, chakra, chakraFailed, balance: await getBalance(id) };
+}
