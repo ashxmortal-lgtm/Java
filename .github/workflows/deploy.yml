@@ -25,6 +25,11 @@ jobs:
 
       - run: npm ci
 
+      - name: Sync cloud snapshot
+        run: npx tgcloud fetch
+        env:
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+
       - name: Deploy
         run: npx tgcloud push
         env:
