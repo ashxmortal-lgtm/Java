@@ -1,6 +1,7 @@
 import { handleSuggestCallback, handleSuggestReply, handleAdmingrpCmd } from './suggest.js';
 import { handleComposeCallback, handleComposeText, handleAdddest } from './compose.js';
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { eq, asc } from 'sdk/db';
 import { quizTopicSuggestions as T, topicEditSessions as S, groupAdmins as GA } from '../schema.js';
 import { ADMIN_IDS, DEFAULT_QUIZ_TIME, USE_STORED_DATE, EDIT_SESSION_TTL } from './topic_config.js';

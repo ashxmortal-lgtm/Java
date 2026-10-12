@@ -637,11 +637,11 @@ export function stakeKeyboard(lobbyId, gameType) {
   const pr = pfx(gameType);
   return {
     inline_keyboard: [
-      [{ text: '◀️ Back', callback_data: `${pr}:cancel:${lobbyId}` }],
       [
-        { text: '500 🍥', callback_data: `${pr}:stake:${lobbyId}:500` },
-        { text: 'Custom Amt', callback_data: `${pr}:custom:${lobbyId}` },
+        { text: '500 🍥', callback_data: `${pr}:stake:${lobbyId}:500`, style: 'primary' },
+        { text: 'Custom Amt', callback_data: `${pr}:custom:${lobbyId}`, style: 'primary' },
       ],
+      [{ text: '◀️ Back', callback_data: `${pr}:cancel:${lobbyId}`, style: 'primary' }],
     ],
   };
 }

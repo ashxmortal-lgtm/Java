@@ -1,4 +1,5 @@
-import { api, db, InputFile, BotApiError } from 'sdk';
+import { db, InputFile, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { sql } from 'sdk/db';
 import { OWNER_ID } from './config.js';
 import { SOURCE_SNAPSHOT } from './source_snapshot.js';

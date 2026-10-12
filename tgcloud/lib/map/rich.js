@@ -7,7 +7,8 @@
  *       https://core.telegram.org/bots/api#richmessagebutton
  */
 
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from '../message_api.js';
 import { escapeHtml, style, mention } from '../texts.js';
 
 /** Plain text for a button label (no HTML). */

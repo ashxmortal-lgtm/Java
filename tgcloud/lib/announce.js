@@ -1,4 +1,5 @@
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { eq, and, asc } from 'sdk/db';
 import {
   announceSessions as AS, announceTargets as AT, announceItems as AI,

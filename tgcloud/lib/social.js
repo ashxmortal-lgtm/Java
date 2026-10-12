@@ -1,4 +1,4 @@
-import { api } from 'sdk';
+import { api } from './message_api.js';
 
 /** Private channel hosting the GIFs (from t.me/c/3889508991/MSG_ID) */
 const GIF_CHAT_ID = -1003889508991;

@@ -1,7 +1,7 @@
 /**
  * Commands + callbacks for XOXO and RPS (rich messages).
  */
-import { api } from 'sdk';
+import { api } from '../message_api.js';
 import { mention, style, escapeHtml } from '../texts.js';
 import { fmt } from '../store.js';
 import {
