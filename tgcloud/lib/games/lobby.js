@@ -4,7 +4,7 @@
 import { db } from 'sdk';
 import { sql } from 'sdk/db';
 import {
-  MIN_STAKE, MAX_STAKE, STAKE_PRESETS, TURN_TIMEOUT_SEC,
+  MIN_STAKE, MAX_STAKE, TURN_TIMEOUT_SEC,
   GAME_XOXO, GAME_RPS,
   STATUS_STAKE, STATUS_CUSTOM, STATUS_CHALLENGE, STATUS_WAITING,
   STATUS_PLAYING, STATUS_FINISHED, STATUS_CANCELLED,
@@ -635,14 +635,15 @@ function glyph(mark) {
 
 export function stakeKeyboard(lobbyId, gameType) {
   const pr = pfx(gameType);
-  const rows = [];
-  for (let i = 0; i < STAKE_PRESETS.length; i += 2) {
-    const chunk = STAKE_PRESETS.slice(i, i + 2);
-    rows.push(chunk.map((n) => ({ text: `${n.toLocaleString()} ${COIN}`, callback_data: `${pr}:stake:${lobbyId}:${n}` })));
-  }
-  rows.push([{ text: '✏️ CUSTOM', callback_data: `${pr}:custom:${lobbyId}` }]);
-  rows.push([{ text: '❌ CANCEL', callback_data: `${pr}:cancel:${lobbyId}` }]);
-  return { inline_keyboard: rows };
+  return {
+    inline_keyboard: [
+      [{ text: '◀️ Back', callback_data: `${pr}:cancel:${lobbyId}` }],
+      [
+        { text: '500 🍥', callback_data: `${pr}:stake:${lobbyId}:500` },
+        { text: 'Custom Amt', callback_data: `${pr}:custom:${lobbyId}` },
+      ],
+    ],
+  };
 }
 
 export function boardKeyboard(lobby) {
