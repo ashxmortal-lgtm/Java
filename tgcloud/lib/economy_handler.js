@@ -1,7 +1,8 @@
 // Economy commands + store/level-up buttons, restored from the old handlers.
 // /start /help /claim /balance /inventory /shinobi_store /buy /mission /patrol /ability /addcoins /backup
 import { runBackup, runFullBackup } from "./backup.js";
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import {
   claimDaily, DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA,
   SAKURA_COINS, SAKURA_CHAKRA,
@@ -19,6 +20,7 @@ import { levelsText, levelsContent } from './levels.js';
 import { economyLocked, ECO_LOCKED_TEXT } from './groupadmin.js';
 import { richOr, editRichOr, storeContent, abilityContent, groupOnlyContent } from './rich.js';
 import { helpText } from './help.js';
+import { profileText } from './profile.js';
 import { sendWelcome, buildUserHelpBlocks, primaryKeyboard } from './welcome_ui.js';
 
 const OWNER_HELP_EXTRA = `
@@ -195,7 +197,7 @@ export async function handleEconomyCommand(message, ctx) {
         parse_mode: 'HTML',
       });
     } else if (cmd === 'profile') {
-      await reply(message, 'Coming soon.');
+      await reply(message, await profileText(user));
     }
   } catch (e) {
     console.error(e);

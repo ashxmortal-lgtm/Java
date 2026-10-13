@@ -1,4 +1,5 @@
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { sql } from 'sdk/db';
 
 export const CLEAN_AFTER = 300; // 5 minutes

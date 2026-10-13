@@ -1,4 +1,5 @@
-import { api, db } from 'sdk';
+import { db } from 'sdk';
+import { api } from '../message_api.js';
 import { eq, and, inArray } from 'sdk/db';
 import { study_todos as T } from '../../schema.js';
 import { mention, userTag, nowIso, istNow, sendBlocks, editBlocks, rp, head, para, bold, divider, quoteText, code, row, btn, fmt12, parseTime } from './common.js';

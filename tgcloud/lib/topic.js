@@ -1,6 +1,7 @@
 import { handleSuggestCallback, handleSuggestReply, handleAdmingrpCmd } from './suggest.js';
 import { handleComposeCallback, handleComposeText, handleAdddest } from './compose.js';
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { eq, asc } from 'sdk/db';
 import { quizTopicSuggestions as T, topicEditSessions as S, groupAdmins as GA } from '../schema.js';
 import { ADMIN_IDS, DEFAULT_QUIZ_TIME, USE_STORED_DATE, EDIT_SESSION_TTL } from './topic_config.js';
@@ -146,11 +147,10 @@ function announcement(t) {
     para('⚡ ', bold('TOPIC:'), ` ${emojiFor(t.topicText)} ${t.topicText}`),
     para('🕘 ', bold('TIME:'), ' ' + (t.scheduledTime || DEFAULT_QUIZ_TIME)),
   ];
-  if (t.showTag && (t.username || t.firstName)) {
-    const who = t.username
-      ? { type: 'url', text: '@' + t.username, url: 'https://t.me/' + t.username }
-      : { type: 'url', text: t.firstName, url: 'tg://user?id=' + t.userId };
-    b.push(para('Topic suggested by: ', who));
+  if (t.showTag && t.userId) {
+    const displayName = t.username ? '@' + t.username : (t.firstName || 'User');
+    const who = { type: 'url', text: displayName, url: 'tg://user?id=' + t.userId };
+    b.push(para('Suggested by: ', who));
   }
   b.push(divider);
   b.push(row(cb('💡 Suggest Quiz Topic', 'topic_suggest_open', 'primary')));

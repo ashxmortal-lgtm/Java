@@ -1,4 +1,5 @@
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { eq, asc } from 'sdk/db';
 import { quizDestinations as D, quizComposeTopics as CT, quizComposeSessions as CS, groupAdmins as GA } from '../schema.js';
 import { ADMIN_IDS, DEFAULT_QUIZ_TIME, EDIT_SESSION_TTL } from './topic_config.js';

@@ -4,7 +4,7 @@
 import { db } from 'sdk';
 import { sql } from 'sdk/db';
 import {
-  MIN_STAKE, MAX_STAKE, STAKE_PRESETS, TURN_TIMEOUT_SEC,
+  MIN_STAKE, MAX_STAKE, TURN_TIMEOUT_SEC,
   GAME_XOXO, GAME_RPS,
   STATUS_STAKE, STATUS_CUSTOM, STATUS_CHALLENGE, STATUS_WAITING,
   STATUS_PLAYING, STATUS_FINISHED, STATUS_CANCELLED,
@@ -513,20 +513,45 @@ export async function cancelLobby(lobbyId, userId) {
   return { ok: true, lobby: updated };
 }
 
+export async function abortXoxoMatch(lobbyId, userId) {
+  const lobby = await getLobby(lobbyId);
+  if (!lobby) return { ok: false, error: 'missing' };
+  if (lobby.status !== STATUS_PLAYING) return { ok: false, error: 'state' };
+  if (lobby.game_type !== GAME_XOXO) return { ok: false, error: 'wrong_game' };
+
+  const participantIds = [lobby.player_x_id, lobby.player_o_id].map(Number);
+  if (!participantIds.includes(Number(userId))) {
+    return { ok: false, error: 'not_participant' };
+  }
+
+  if (Number(lobby.stakes_reserved) === 1) await refundStakes(lobby);
+  const updated = await saveLobby(lobby, {
+    status: STATUS_CANCELLED,
+    result: RESULT_CANCEL,
+    winner_id: null,
+    current_turn: null,
+  });
+  await unbindLobby(updated);
+  return { ok: true, lobby: updated };
+}
+
+async function settleExpiredXoxoTurn(lobby) {
+  if (!lobby.turn_started_at || now() - Number(lobby.turn_started_at) <= TURN_TIMEOUT_SEC) {
+    return null;
+  }
+  const turn = lobby.current_turn || 'X';
+  const winnerId = turn === 'X' ? lobby.player_o_id : lobby.player_x_id;
+  return finishLobby(lobby, RESULT_TIMEOUT, winnerId);
+}
+
 export async function makeMove(lobbyId, userId, cell, chatId) {
   let lobby = await getLobby(lobbyId);
   if (!lobby) return { ok: false, error: 'missing' };
   if (lobby.status !== STATUS_PLAYING) return { ok: false, error: 'state' };
   if (lobby.game_type !== GAME_XOXO) return { ok: false, error: 'wrong_game' };
 
-  // timeout
-  if (lobby.turn_started_at && now() - Number(lobby.turn_started_at) > TURN_TIMEOUT_SEC) {
-    const turn = lobby.current_turn || 'X';
-    const timedOutId = turn === 'X' ? lobby.player_x_id : lobby.player_o_id;
-    const winnerId = turn === 'X' ? lobby.player_o_id : lobby.player_x_id;
-    lobby = await finishLobby(lobby, RESULT_TIMEOUT, winnerId);
-    return { ok: true, lobby, timed: true };
-  }
+  const timedOut = await settleExpiredXoxoTurn(lobby);
+  if (timedOut) return { ok: true, lobby: timedOut, timed: true };
 
   const turn = lobby.current_turn || 'X';
   const turnId = turn === 'X' ? lobby.player_x_id : lobby.player_o_id;
@@ -635,14 +660,15 @@ function glyph(mark) {
 
 export function stakeKeyboard(lobbyId, gameType) {
   const pr = pfx(gameType);
-  const rows = [];
-  for (let i = 0; i < STAKE_PRESETS.length; i += 2) {
-    const chunk = STAKE_PRESETS.slice(i, i + 2);
-    rows.push(chunk.map((n) => ({ text: `${n.toLocaleString()} ${COIN}`, callback_data: `${pr}:stake:${lobbyId}:${n}` })));
-  }
-  rows.push([{ text: '✏️ CUSTOM', callback_data: `${pr}:custom:${lobbyId}` }]);
-  rows.push([{ text: '❌ CANCEL', callback_data: `${pr}:cancel:${lobbyId}` }]);
-  return { inline_keyboard: rows };
+  return {
+    inline_keyboard: [
+      [
+        { text: '500 🍥', callback_data: `${pr}:stake:${lobbyId}:500`, style: 'primary' },
+        { text: 'Custom Amt', callback_data: `${pr}:custom:${lobbyId}`, style: 'primary' },
+      ],
+      [{ text: '◀️ Back', callback_data: `${pr}:cancel:${lobbyId}`, style: 'primary' }],
+    ],
+  };
 }
 
 export function boardKeyboard(lobby) {
@@ -658,9 +684,17 @@ export function boardKeyboard(lobby) {
         callback_data: mark || lobby.status !== STATUS_PLAYING
           ? `${pr}:noop:${lobby.lobby_id}`
           : `${pr}:cell:${lobby.lobby_id}:${i}`,
+        style: 'transparent',
       });
     }
     rows.push(row);
+  }
+  if (lobby.status === STATUS_PLAYING) {
+    rows.push([{
+      text: '🛑 ABORT MATCH',
+      callback_data: `xo:abort:${lobby.lobby_id}`,
+      style: 'primary',
+    }]);
   }
   return { inline_keyboard: rows };
 }
@@ -737,7 +771,16 @@ export function renderLobby(lobby, viewerUser = null) {
   if (lobby.status === STATUS_PLAYING) {
     if (gt === GAME_RPS) return renderRpsPlaying(lobby);
     const turn = lobby.current_turn || 'X';
-    const body = h(`${t}`) + p(`Pot: <b>${Number(lobby.pot).toLocaleString()} ${COIN}</b>`) + p(`Turn: <b>${turn}</b> ${turn === 'X' ? CELL_X : CELL_O}`) + p(lobby.board.map(glyph).join(''));
+    const isXTurn = turn === 'X';
+    const currentPlayer = {
+      id: isXTurn ? lobby.player_x_id : lobby.player_o_id,
+      first_name: isXTurn ? lobby.player_x_first_name : lobby.player_o_first_name,
+    };
+    const turnSymbol = isXTurn ? '&#88;' : '&#79;';
+    const body = p(`Turn: ${mention(currentPlayer)} ${turnSymbol}`)
+      + p(`ᴘᴏᴛ: <b>${Number(lobby.pot).toLocaleString()} ${COIN}</b>`)
+      + p(`ᴛᴜʀɴ: ${turn.toLowerCase()} ${isXTurn ? CELL_X : CELL_O}`)
+      + p(lobby.board.map(glyph).join(''));
     return { body, keyboard: boardKeyboard(lobby) };
   }
   if (lobby.status === STATUS_FINISHED) {
@@ -749,7 +792,10 @@ export function renderLobby(lobby, viewerUser = null) {
     return { body, keyboard: { inline_keyboard: [] } };
   }
   if (lobby.status === STATUS_CANCELLED) {
-    return { body: h(`${t} CANCELLED`) + p('Lobby closed.'), keyboard: { inline_keyboard: [] } };
+    const msg = lobby.game_type === GAME_XOXO && lobby.turn_started_at
+      ? 'Match aborted — both stakes refunded.'
+      : 'Lobby closed.';
+    return { body: h(`${t} CANCELLED`) + p(msg), keyboard: { inline_keyboard: [] } };
   }
   return { body: h(t), keyboard: { inline_keyboard: [] } };
 }
@@ -781,7 +827,7 @@ export function gamesListBody() {
     + p('<b>/xoxo</b> — Tic-Tac-Toe (2 players, stakes)')
     + p('<b>/rps</b> — Rock Paper Scissors (2–4 players)')
     + p('<b>/xoxo_stats</b> · <b>/rps_stats</b>')
-    + p('<b>/xoxo_cancel</b> — leave lobby before match starts');
+    + p('<b>/xoxo_cancel</b> — cancel a lobby or abort an active XOXO match (both stakes refunded)');
 }
 
 export function gamesKeyboard() {

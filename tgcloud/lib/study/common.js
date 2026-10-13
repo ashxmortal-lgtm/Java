@@ -1,6 +1,7 @@
 // Shared helpers for the Study module.
 // IST = UTC+5:30 (no DST). Rich menus use the same block shape as /topic and /hnc.
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from '../message_api.js';
 
 export const esc = (s) => String(s ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
 
