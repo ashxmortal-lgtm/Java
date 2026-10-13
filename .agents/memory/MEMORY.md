@@ -1,0 +1,1 @@
+- [Telegram Serverless workflow](telegram-serverless-workflow.md) — preserve the existing tgcloud architecture and require a branch, checks, diff review, and explicit approval for data or release actions.

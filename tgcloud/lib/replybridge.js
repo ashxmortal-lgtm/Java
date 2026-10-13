@@ -1,4 +1,5 @@
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { eq, and } from 'sdk/db';
 import { replyBridge as RB, announcedMessages as AM } from '../schema.js';
 import { isGroupChat } from './groupadmin.js';

@@ -1,4 +1,5 @@
-import { api, db } from 'sdk';
+import { db } from 'sdk';
+import { api } from '../message_api.js';
 import { eq, and, inArray } from 'sdk/db';
 import { biology_tracker as T } from '../../schema.js';
 import { BIOLOGY_TRACKER, getUnit, getChapter } from './tracker_data.js';

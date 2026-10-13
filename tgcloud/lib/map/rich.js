@@ -7,7 +7,8 @@
  *       https://core.telegram.org/bots/api#richmessagebutton
  */
 
-import { api, BotApiError } from 'sdk';
+import { BotApiError } from 'sdk';
+import { api } from '../message_api.js';
 import { escapeHtml, style, mention } from '../texts.js';
 
 /** Plain text for a button label (no HTML). */
@@ -27,7 +28,7 @@ export function richBtn(text, data, btnStyle = null) {
 }
 
 /** One row of rich buttons (1–8). align: left|center|right */
-export function richRow(buttonsHtml, align = 'left') {
+export function richRow(buttonsHtml, align = 'center') {
   return `<tg-button-row align="${align}">${buttonsHtml.join('')}</tg-button-row>`;
 }
 

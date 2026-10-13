@@ -12,9 +12,8 @@ const SC = {
   y: 'ʏ', z: 'ᴢ',
 };
 
-// Parts that stay unchanged: embedded links, <code> item names,
-// HTML tags, entities, URLs, @usernames and /commands.
-const KEEP = /<a\b[^>]*>.*?<\/a>|<code>.*?<\/code>|<[^>]+>|&[a-z#0-9]+;|https?:\/\/\S+|@\w+|\/\w+/gi;
+// Keep embedded links, code, HTML, entities, URLs, @usernames, and /commands.
+const KEEP = /<a\b[^>]*>[\s\S]*?<\/a>|<code>[\s\S]*?<\/code>|\[[^\]\n]*\]\((?:\\.|[^)\n])+\)|<[^>]+>|&[a-z#0-9]+;|\b(?:https?|ftp|tg):\/\/[^\s<>]+|\bmailto:[^\s<>]+|\b(?:www\.|t\.me\/|telegram\.me\/)[^\s<>]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s<>]*)?|@\w+|\/\w+/gi;
 
 function convert(s) {
   return s.replace(/[a-z]/gi, (c) => SC[c.toLowerCase()] ?? c);

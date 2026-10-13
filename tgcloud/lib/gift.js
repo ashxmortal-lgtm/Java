@@ -1,4 +1,5 @@
-import { api, db, BotApiError } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { eq, and } from 'sdk/db';
 import { users, inventory } from '../schema.js';
 
@@ -27,12 +28,12 @@ const row = (...buttons) => ({ type: 'buttons', buttons, align: 'center' });
 const cb = (text, data, style) => (style ? { text, callback_data: data, style } : { text, callback_data: data });
 const rich = (blocks) => ({ blocks });
 
-function catalogBlocks() {
+export function catalogBlocks() {
   return [
     {
       type: 'heading',
-      size: 2,
-      text: "🌸 Welcome to Ino's Gift Store 💐",
+      size: 1,
+      text: "WELCOME TO INO'S GIFT STORE",
     },
     {
       type: 'details',
@@ -82,7 +83,7 @@ function catalogPlain() {
   ].join('\n');
 }
 
-async function showCatalog(chatId) {
+export async function showCatalog(chatId) {
   try {
     await api.sendRichMessage({ chat_id: chatId, rich_message: rich(catalogBlocks()) });
   } catch (e) {

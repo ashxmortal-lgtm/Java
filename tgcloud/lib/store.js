@@ -11,7 +11,6 @@ export const JUTSU = [
   { name: 'Mind Transmission Jutsu', emoji: '🧠', price: 1000 },
 ];
 
-// 100 Chakra = 200 coins -> 2 coins per Chakra, minimum 100.
 export const CHAKRA_RATE = 2;
 export const CHAKRA_MIN = 100;
 
@@ -27,11 +26,9 @@ export function findItem(name) {
 
 const DIGITS = ['𝟎','𝟏','𝟐','𝟑','𝟒','𝟓','𝟔','𝟕','𝟖','𝟗'];
 
-// 20000 -> "20,000"
 export function fmt(n) {
   return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
-// 20000 -> "𝟐𝟎,𝟎𝟎𝟎"
 export function boldNum(n) {
   return fmt(n).replace(/\d/g, (d) => DIGITS[d]);
 }
@@ -49,28 +46,40 @@ export const SCREENS = ['main', 'jutsu', 'chakra'];
 
 export function screenText(screen) {
   if (screen === 'jutsu') {
-    return `🌀 𝐉𝐔𝐓𝐒𝐔\n\n` + JUTSU.map(line).join('\n') + FOOTER;
+    return (
+      `<b>🌀 𝐉𝐔𝐓𝐒𝐔</b>\n\n` +
+      `<blockquote>${JUTSU.map(line).join('\n')}</blockquote>` +
+      FOOTER
+    );
   }
   if (screen === 'chakra') {
-    return `⚡ 𝐂𝐇𝐀𝐊𝐑𝐀\n\n` +
-      `✦ <code>Chakra</code> × 100 : ${boldNum(100 * CHAKRA_RATE)} 🍥` + FOOTER;
+    return (
+      `<b>⚡ 𝐂𝐇𝐀𝐊𝐑𝐀</b>\n\n` +
+      `<blockquote>✦ <code>Chakra</code> × 100 : ${boldNum(100 * CHAKRA_RATE)} 🍥</blockquote>` +
+      FOOTER
+    );
   }
+  // Larger heading + pull-quote list for shinobi
   return (
-    `🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄\n` +
-    `ʀᴇᴄʀᴜɪᴛ ʏᴏᴜʀ ɴᴇxᴛ ꜱʜɪɴᴏʙɪ\n\n` +
-    `⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈\n\n` +
-    SHINOBI.map(line).join('\n') + FOOTER
+    `<b>🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄</b>\n` +
+    `<i>ʀᴇᴄʀᴜɪᴛ ʏᴏᴜʀ ɴᴇxᴛ ꜱʜɪɴᴏʙɪ</i>\n\n` +
+    `<b>⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈</b>\n\n` +
+    `<blockquote>${SHINOBI.map(line).join('\n')}</blockquote>` +
+    FOOTER
   );
 }
 
-// callback_data = "store:<screen>:<ownerId>" (well under the 64-byte limit)
 export function screenKeyboard(screen, ownerId) {
   const cb = (s) => `store:${s}:${ownerId}`;
   if (screen === 'main') {
-    return { inline_keyboard: [[
-      { text: style('Jutsu'), callback_data: cb('jutsu') },
-      { text: style('Chakra'), callback_data: cb('chakra') },
-    ]] };
+    return {
+      inline_keyboard: [[
+        { text: style('Jutsu'), callback_data: cb('jutsu') },
+        { text: style('Chakra'), callback_data: cb('chakra') },
+      ]],
+    };
   }
-  return { inline_keyboard: [[{ text: style('Back'), callback_data: cb('main') }]] };
+  return {
+    inline_keyboard: [[{ text: style('Back'), callback_data: cb('main') }]],
+  };
 }

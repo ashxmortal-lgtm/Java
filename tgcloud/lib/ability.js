@@ -11,7 +11,7 @@ export const ROWS = [
   ['👁️ Hinata', 'byakugan · /byakugan → reveals protection time · once per day, private'],
   ['🧠 Mind Transmission', '/mt → hidden message · jutsu owners only'],
   ['🍃 Rank', 'academy → genin → chūnin → jōnin → anbu → kage'],
-  ['👤 Profile', '/profile → rank & stats'],
+  ['👤 Profile', '/profile → rank, XP, roster & stats'],
 ];
 
 // Rich message (HTML table). Styled font, mention on top.

@@ -309,6 +309,58 @@ export const knownGroups = table('known_groups', {
 // APPEND to schema.js — do not replace existing tables.
 // Requires: table, integer, text, uniqueIndex, index from 'sdk/db'
 
+
+/** Map: pending patrol rewards (claim at Hokage Office). */
+
+/** Map: shinobi resting at BBQ for chakra recovery. */
+
+/** Map: cached Telegram photo file_ids for storage channel messages. */
+export const mapMediaCache = table('map_media_cache', {
+  storageMessageId: integer('storage_message_id').primaryKey(),
+  fileId: text('file_id').notNull(),
+});
+
+/** Map gate multi-select: shinobi marked for next patrol dispatch. */
+export const mapGateSelection = table('map_gate_selection', {
+  telegramId: integer('telegram_id').notNull(),
+  shinobi: text('shinobi').notNull(),
+}, (t) => ({
+  pk: uniqueIndex('uidx_map_gate_sel').on(t.telegramId, t.shinobi),
+}));
+
+export const bbqSessions = table('bbq_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  telegramId: integer('telegram_id').notNull(),
+  shinobi: text('shinobi').notNull(),
+  bbqStart: integer('bbq_start').notNull().default(0),
+  lastRecoveryAt: integer('last_recovery_at').notNull().default(0),
+}, (t) => ({
+  ownerShinobi: uniqueIndex('uidx_bbq_sessions_owner_shinobi').on(t.telegramId, t.shinobi),
+}));
+
+export const pendingPatrolRewards = table('pending_patrol_rewards', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  telegramId: integer('telegram_id').notNull(),
+  shinobi: text('shinobi').notNull(),
+  kind: text('kind').notNull().default('patrol'),
+  reward: integer('reward').notNull().default(0),
+  completedAt: integer('completed_at').notNull().default(0),
+  claimed: integer('claimed').notNull().default(0),
+}, (t) => ({
+  ownerShinobi: index('idx_pending_patrol_owner').on(t.telegramId, t.shinobi, t.claimed),
+}));
+
+/** Map: prepared field meal for next mission/patrol (one slot per user via shinobi='*'). */
+export const fieldMeals = table('field_meals', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  telegramId: integer('telegram_id').notNull(),
+  shinobi: text('shinobi').notNull().default('*'),
+  mealKey: text('meal_key').notNull(),
+  preparedAt: integer('prepared_at').notNull().default(0),
+}, (t) => ({
+  ownerShinobi: uniqueIndex('uidx_field_meals_owner_shinobi').on(t.telegramId, t.shinobi),
+}));
+
 export const gameLobbies = table('game_lobbies', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   chatId: integer('chat_id').notNull(),
@@ -386,3 +438,31 @@ export const gameTx = table('game_tx', {
   key: text('key').primaryKey(),
   createdAt: integer('created_at').notNull(),
 });
+
+// Persistent support inbox routing. Existing topics and conversation history are retained.
+export const supportConversations = table('support_conversations', {
+  userId: integer('user_id').primaryKey(),
+  // NULL only while a first-topic creation reservation is in progress.
+  threadId: integer('thread_id'),
+  status: text('status').notNull().default('stopped'),
+  displayName: text('display_name').notNull().default('User'),
+  username: text('username'),
+  lastConfirmationMessageId: integer('last_confirmation_message_id'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (t) => ({
+  thread: uniqueIndex('uidx_support_conversations_thread').on(t.threadId),
+}));
+
+// Bidirectional message IDs let an admin's topic reply quote the matching user DM.
+export const supportMessageLinks = table('support_message_links', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull(),
+  threadId: integer('thread_id').notNull(),
+  supportMessageId: integer('support_message_id').notNull(),
+  userMessageId: integer('user_message_id').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, (t) => ({
+  uniqueTopicMessage: uniqueIndex('uidx_support_message_links_topic_message').on(t.threadId, t.supportMessageId),
+  userIdx: index('idx_support_message_links_user').on(t.userId),
+}));
