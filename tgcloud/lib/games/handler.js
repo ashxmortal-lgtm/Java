@@ -8,7 +8,7 @@ import {
   GAME_XOXO, GAME_RPS, MIN_STAKE, COIN, STATUS_CUSTOM, STATUS_PLAYING,
 } from './constants.js';
 import {
-  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby,
+  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby, abortXoxoMatch,
   acceptChallenge, startRpsMatch, cancelLobby, makeMove, rpsSubmitMove,
   rpsAdvanceReveal, getLobby, getPlayerLobbyId, clearPlayerLock, getStats,
   renderLobby, gamesListBody, gamesKeyboard, parseStake,
@@ -109,6 +109,23 @@ export async function handleCancelCommand(message) {
   const lobby = await getLobby(lid);
   if (!lobby || lobby.status === STATUS_PLAYING) {
     if (lobby?.status === STATUS_PLAYING) {
+      if ((lobby.game_type || GAME_XOXO) === GAME_XOXO) {
+        const result = await abortXoxoMatch(lid, user.id);
+        if (!result.ok) {
+          const msg = result.error === 'not_participant'
+            ? 'Only a player in this XOXO match can abort it.'
+            : 'This XOXO match is no longer active.';
+          await sendGameRich(chatId, gameBody(user, p(msg)), null);
+          return;
+        }
+        if (lobby.message_id) await showLobby(chatId, lobby.message_id, result.lobby, user);
+        await sendGameRich(
+          chatId,
+          gameBody(user, p('XOXO match aborted; both stakes have been refunded.')),
+          null,
+        );
+        return;
+      }
       await sendGameRich(chatId, gameBody(user, p('Match in progress — finish it or wait for timeout.')), null);
       return;
     }
@@ -281,6 +298,23 @@ export async function handleGamesCallback(cb) {
       return true;
     }
     await answer(cb);
+    await showLobby(chatId, messageId, result.lobby, user);
+    return true;
+  }
+
+  if (action === 'abort' && pfx === 'xo') {
+    const result = await abortXoxoMatch(lobbyId, user.id);
+    if (!result.ok) {
+      const map = {
+        not_participant: 'Only the two players in this match can abort it.',
+        state: 'This XOXO match is no longer active.',
+        wrong_game: 'This button is only for XOXO matches.',
+        missing: 'Match not found.',
+      };
+      await answer(cb, map[result.error] || "Can't abort this match.", true);
+      return true;
+    }
+    await answer(cb, 'Match aborted; both stakes refunded.');
     await showLobby(chatId, messageId, result.lobby, user);
     return true;
   }
