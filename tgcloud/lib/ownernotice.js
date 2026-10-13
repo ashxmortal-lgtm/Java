@@ -1,8 +1,9 @@
 import { db, BotApiError } from 'sdk';
 import { api } from './message_api.js';
 import { eq } from 'sdk/db';
-import { users, knownGroups as KG } from '../schema.js';
+import { users, knownGroups as KG, supportConversations } from '../schema.js';
 import { OWNER_ID } from './config.js';
+import { SUPPORT_GROUP_ID, SUPPORT_USERS_TOPIC_ID } from './topic_config.js';
 
 const para = (...t) => ({ type: 'paragraph', text: t.length === 1 ? t[0] : t });
 const code = (text) => ({ type: 'code', text: String(text) });
@@ -52,9 +53,9 @@ export async function notifyNewUser(message) {
     }
 
     const uname = from.username ? `@${from.username}` : 'no username';
-    await toOwner(
+    await toSupportTopic(
       `#newuser\n👤 ${profileLink(from)}\n🆔 User ID: <code>${from.id}</code>\n🔗 ${esc(uname)}`,
-      [para('#newuser'), para('👤 ', mention(from)), para('🆔 User ID: ', code(from.id))],
+      SUPPORT_USERS_TOPIC_ID,
     );
   } catch (e) {
     console.error('notifyNewUser failed:', e);
@@ -131,9 +132,17 @@ export async function notifyBlockedOrRemoved(update) {
         if (u) await db.update(users).set({ blocked: 1 }).where(eq(users.telegramId, id)).run();
         else await db.insert(users).values({ telegramId: id, firstName: name, username: by.username || null, blocked: 1 }).run();
       } catch (e) { console.error('blocked flag failed', e); }
-      await toOwner(
+      let destination = SUPPORT_USERS_TOPIC_ID;
+      try {
+        const support = await db.select().from(supportConversations)
+          .where(eq(supportConversations.userId, id)).get();
+        if (support?.threadId) destination = support.threadId;
+      } catch (e) {
+        console.error('blocked-user support topic lookup failed:', e?.description || e?.message || 'unknown error');
+      }
+      await toSupportTopic(
         `#blockbot\n🚫 <b>User blocked the bot</b>\n👤 <a href="tg://user?id=${id}">${esc(name)}</a>\n🆔 <code>${id}</code>\n🔗 ${esc(uname)}`,
-        [para('#blockbot'), para('🚫 User blocked the bot'), para('👤 ', name), para('🆔 ', code(id))],
+        destination,
       );
       return;
     }
@@ -146,5 +155,21 @@ export async function notifyBlockedOrRemoved(update) {
     }
   } catch (e) {
     console.error('notifyBlockedOrRemoved failed:', e);
+  }
+}
+async function toSupportTopic(plainHtml, threadId) {
+  if (!Number.isSafeInteger(SUPPORT_GROUP_ID) || SUPPORT_GROUP_ID >= 0 || !Number.isSafeInteger(threadId) || threadId <= 0) {
+    console.error('Support notification skipped: configure SUPPORT_GROUP_ID and a valid topic ID.');
+    return;
+  }
+  try {
+    await api.sendMessage({
+      chat_id: SUPPORT_GROUP_ID,
+      message_thread_id: threadId,
+      text: plainHtml,
+      parse_mode: 'HTML',
+    });
+  } catch (e) {
+    console.error('Support notification failed:', e?.description || e?.message || 'unknown error');
   }
 }
