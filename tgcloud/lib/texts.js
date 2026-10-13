@@ -12,9 +12,8 @@ const SC = {
   y: 'ʏ', z: 'ᴢ',
 };
 
-// Parts that stay unchanged: embedded links, <code> item names,
-// HTML tags, entities, URLs, @usernames and /commands.
-const KEEP = /<a\b[^>]*>.*?<\/a>|<code>.*?<\/code>|<[^>]+>|&[a-z#0-9]+;|https?:\/\/\S+|@\w+|\/\w+/gi;
+// Keep embedded links, code, HTML, entities, URLs, @usernames, and /commands.
+const KEEP = /<a\b[^>]*>[\s\S]*?<\/a>|<code>[\s\S]*?<\/code>|\[[^\]\n]*\]\((?:\\.|[^)\n])+\)|<[^>]+>|&[a-z#0-9]+;|\b(?:https?|ftp|tg):\/\/[^\s<>]+|\bmailto:[^\s<>]+|\b(?:www\.|t\.me\/|telegram\.me\/)[^\s<>]+|\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s<>]*)?|@\w+|\/\w+/gi;
 
 function convert(s) {
   return s.replace(/[a-z]/gi, (c) => SC[c.toLowerCase()] ?? c);
@@ -35,18 +34,19 @@ export function mention(user) {
   return `<a href="tg://user?id=${user.id}">${name}</a>`;
 }
 
-export function welcome() {
-  return (
-    `welcome bot @exfrozen_bot\n` +
-    `Use command below to start.\n\n` +
-    `/Claim - Claim Daily checkin reward\n` +
-    `/Balance - check your balance\n` +
-    `/Profile -\n` +
-    `/Inventory - open inventory`
-  );
-}
 
 // Mention on the first line, blank line, then the content, in the bot font.
 export function render(user, body) {
   return style(`${mention(user)}\n\n${body}`);
+}
+
+export function welcome() {
+  return (
+    `welcome to @exfrozen_bot\n` +
+    `use command below to start.\n\n` +
+    `/Claim - claim daily checkin reward\n` +
+    `/Balance - check your balance\n` +
+    `/Profile -\n` +
+    `/Inventory - open inventory`
+  );
 }

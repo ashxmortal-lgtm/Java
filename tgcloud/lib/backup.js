@@ -1,4 +1,5 @@
-import { api, db, InputFile, BotApiError } from 'sdk';
+import { db, InputFile, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { sql } from 'sdk/db';
 import { OWNER_ID } from './config.js';
 import { SOURCE_SNAPSHOT } from './source_snapshot.js';
@@ -67,20 +68,30 @@ export async function runBackup(requesterChatId) {
       }
     }
     if (requesterChatId !== OWNER_ID) {
-      await api.sendMessage({ chat_id: requesterChatId, text: 'Backup sent to your DM.' });
+      await notice(requesterChatId, 'Backup sent to your DM.');
     }
   } catch (e) {
     console.error('backup failed', e);
     const dmBlocked = e instanceof BotApiError && (e.code === 403 || e.code === 400);
-    await api.sendMessage({
-      chat_id: requesterChatId,
-      text: dmBlocked
-        ? 'I cannot DM you. Open the bot privately and press Start first.'
-        : 'Backup failed. Check the logs.',
-    });
+    await notice(requesterChatId, dmBlocked
+      ? 'I cannot DM you. Open the bot privately and press Start first.'
+      : 'Backup failed. Check the logs.');
   }
 }
 
+
+// Status texts go out as rich messages; plain text only if Telegram refuses the rich one.
+async function notice(chatId, text) {
+  try {
+    await api.sendRichMessage({
+      chat_id: chatId,
+      rich_message: { blocks: [{ type: 'paragraph', text }], skip_entity_detection: true },
+    });
+  } catch (e) {
+    if (!(e instanceof BotApiError)) throw e;
+    await api.sendMessage({ chat_id: chatId, text });
+  }
+}
 
 // Sends a bundled snapshot of the project source. Refresh source_snapshot.js
 // after changing project files, then redeploy. This does not read the runtime filesystem.
@@ -103,7 +114,10 @@ export async function runFullBackup(requesterChatId) {
   } catch (e) {
     console.error('full source backup failed', e);
     try {
-      await api.sendMessage({ chat_id: requesterChatId, text: 'Full source backup failed. Check the deployment logs.' });
+      await notice(requesterChatId, 'Full source backup failed. Check the deployment logs.');
     } catch (_) {}
   }
 }
+
+
+

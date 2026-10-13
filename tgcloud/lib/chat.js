@@ -1,4 +1,5 @@
-import { api, db } from 'sdk';
+import { db, BotApiError } from 'sdk';
+import { api } from './message_api.js';
 import { sql } from 'sdk/db';
 
 export const CLEAN_AFTER = 300; // 5 minutes
@@ -20,8 +21,32 @@ async function remember(chatId, sent) {
   } catch (e) { console.error(e); }
 }
 
+// Classic HTML text -> rich HTML (one <p> per line, quotes kept).
+function toRichHtml(text) {
+  const para = (s) => s.split('\n').map((l) => l.trim()).filter(Boolean)
+    .map((l) => `<p>${l}</p>`).join('');
+  return text.split(/(<blockquote>[\s\S]*?<\/blockquote>)/).map((seg) => {
+    const m = seg.match(/^<blockquote>([\s\S]*?)<\/blockquote>$/);
+    return m ? `<blockquote>${para(m[1])}</blockquote>` : para(seg);
+  }).join('');
+}
+
+// Every HTML text without an inline keyboard goes out as a rich message.
+// If Telegram refuses it, the classic message is sent instead.
 export async function send(chatId, params) {
-  const sent = await api.sendMessage({ chat_id: chatId, ...params });
+  let sent;
+  if (params.parse_mode === 'HTML' && params.text && !params.reply_markup) {
+    try {
+      const extra = params.reply_parameters ? { reply_parameters: params.reply_parameters } : {};
+      sent = await api.sendRichMessage({
+        chat_id: chatId, rich_message: { html: toRichHtml(params.text) }, ...extra,
+      });
+    } catch (e) {
+      if (!(e instanceof BotApiError)) throw e;
+      console.error(e);
+    }
+  }
+  if (!sent) sent = await api.sendMessage({ chat_id: chatId, ...params });
   await remember(chatId, sent);
   return sent;
 }

@@ -1,57 +1,54 @@
-import { api, BotApiError } from 'sdk';
-import { render } from '../lib/texts.js';
-import { SCREENS, screenText, screenKeyboard } from '../lib/store.js';
-import { abilityHtml, abilityText, abilityKeyboard, backKeyboard } from '../lib/ability.js';
-import { levelsText } from '../lib/levels.js';
+import { handleStudyCallback } from '../lib/study/router.js';
+import { handleTopicCallback } from '../lib/topic.js';
+import { BotApiError } from 'sdk';
+import { api } from '../lib/message_api.js';
+import { menus } from '../lib/hnc.js';
+import { handleEconomyCallback } from '../lib/economy_handler.js';
+import { handleGroupAdminCallback } from '../lib/groupadmin.js';
+import { handleAnnounceCallback } from '../lib/announce.js';
+import { handleReactionCallback } from '../lib/replybridge.js';
+import { handleOwnerCallback } from '../lib/owner_cmds.js';
+import { handleWelcomeCallback } from '../lib/welcome_ui.js';
+import { handleGiftCallback } from '../lib/gift.js';
+import { handleInventoryCallback } from '../lib/inventory.js';
+import { handleGamesCallback, isGamesCallback } from '../lib/games/handler.js';
+import { handleMapCallback, isMapCallback } from '../lib/map/handler.js';
 
-// Try a rich edit first, then the classic edit.
-async function show(msg, rich, classic, markup) {
-  const base = { chat_id: msg.chat.id, message_id: msg.message_id, reply_markup: markup };
+export default async function (cq) {
+  if (isMapCallback(cq.data)) {
+    const handled = await handleMapCallback(cq);
+    if (handled) return;
+  }
+
+  if (isGamesCallback(cq.data)) {
+    const handled = await handleGamesCallback(cq);
+    if (handled) return;
+  }
+
+  if (await handleStudyCallback(cq)) return;
+  if (await handleTopicCallback(cq)) return;
+  if (await handleGroupAdminCallback(cq)) return;
+  if (await handleAnnounceCallback(cq)) return;
+  if (await handleReactionCallback(cq)) return;
+  if (await handleOwnerCallback(cq)) return;
+  if (await handleWelcomeCallback(cq)) return;
+  if (await handleGiftCallback(cq)) return;
+  if (await handleInventoryCallback(cq)) return;
+  if (await handleEconomyCallback(cq)) return;
+
+  const key = (cq.data || '').replace('hnc:', '');
+  const blocks = menus[key];
+
+  await api.answerCallbackQuery({ callback_query_id: cq.id });
+  if (!blocks || !cq.message) return;
+
   try {
-    await api.editMessageText({ ...base, rich_message: { html: rich } });
+    await api.editMessageText({
+      chat_id: cq.message.chat.id,
+      message_id: cq.message.message_id,
+      rich_message: { blocks, skip_entity_detection: true },
+    });
   } catch (e) {
-    if (!(e instanceof BotApiError)) throw e;
-    await api.editMessageText({ ...base, text: classic, parse_mode: 'HTML' });
+    if (!(e instanceof BotApiError && e.code === 400)) throw e;
   }
-}
-
-export default async function (cb) {
-  const answer = (text) =>
-    api.answerCallbackQuery({ callback_query_id: cb.id, ...(text ? { text } : {}) });
-
-  const [kind, a, b] = String(cb.data || '').split(':');
-  const msg = cb.message;
-  const isStore = kind === 'store' && SCREENS.includes(a);
-  const isLv = kind === 'lv' && (a === 'up' || a === 'ab');
-  if (!msg || !(isStore || isLv)) {
-    await answer();
-    return;
-  }
-  if (cb.from.id !== Number(b)) {
-    await answer("This menu isn't yours. Send the command to open your own.");
-    return;
-  }
-  try {
-    if (isStore) {
-      await api.editMessageText({
-        chat_id: msg.chat.id,
-        message_id: msg.message_id,
-        text: render(cb.from, screenText(a)),
-        parse_mode: 'HTML',
-        reply_markup: screenKeyboard(a, cb.from.id),
-      });
-    } else if (a === 'up') {
-      const classic = await levelsText(cb.from);
-      await show(msg, classic.replace(/\n/g, '<br>'), classic, backKeyboard(cb.from.id));
-    } else {
-      await show(msg, abilityHtml(cb.from), render(cb.from, abilityText()), abilityKeyboard(cb.from.id));
-    }
-  } catch (e) {
-    if (!(e instanceof BotApiError && e.code === 400)) {
-      console.error(e);
-      await answer('Something went wrong. Try again.');
-      return;
-    }
-  }
-  await answer();
 }
