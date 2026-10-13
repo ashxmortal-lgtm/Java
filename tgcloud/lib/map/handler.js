@@ -1,13 +1,13 @@
 /**
- * Map command + callback router (rich messages + classic fallback).
- * Pets omitted. Does not touch non-map handlers.
+ * Map command + callback router.
+ * Photo captions + centered keyboards; rich fallback when media fails.
  */
 
 import { BotApiError } from 'sdk';
 import { api } from '../message_api.js';
 import { db } from 'sdk';
 import { sql } from 'sdk/db';
-import { mention, style, escapeHtml } from '../texts.js';
+import { style, escapeHtml, mention } from '../texts.js';
 import { screenText, screenKeyboard, fmt } from '../store.js';
 import { runActivity, KINDS } from '../activities.js';
 import { MAP_ENABLED, MAX_CHAKRA } from './constants.js';
@@ -24,8 +24,8 @@ import {
   backToMapRow,
 } from './ui.js';
 import {
-  listPendingPatrolRewards,
-  claimPendingPatrolRewards,
+  listPendingRewards,
+  claimAllPendingRewards,
 } from './pending.js';
 import {
   applyBbqRecovery,
@@ -39,11 +39,17 @@ import {
   buyRamen,
   prepareFieldMeal,
 } from './ichiraku.js';
-import { sendMapRich, editMapRich, mapBody } from './rich.js';
+import { sendMapRich, editMapRich, mapBody, richHtml } from './rich.js';
+import { showMapPhoto, storageIdForLocation } from './media.js';
 
 const EMO = {
-  Sasuke: '⚔️', Sakura: '🌸', Naruto: '🍥', Itachi: '👁️',
-  Hinata: '👁️', Jiraiya: '🐸', 'Starter Shinobi': '🥷',
+  Sasuke: '⚔️',
+  Sakura: '🌸',
+  Naruto: '🍥',
+  Itachi: '👁️',
+  Hinata: '👁️',
+  Jiraiya: '🐸',
+  'Starter Shinobi': '🥷',
 };
 
 async function answer(cb, text, alert = false) {
@@ -76,7 +82,7 @@ function locBody(title, lines) {
 const LOC_COPY = {
   hokage: {
     title: '🏯 HOKAGE OFFICE',
-    lines: ['Shinobi missions · Daily Mission · patrol claims.'],
+    lines: ['Shinobi missions · Daily Quest · claim all rewards.'],
   },
   ichiraku: {
     title: '🍜 ICHIRAKU RAMEN',
@@ -88,7 +94,7 @@ const LOC_COPY = {
   },
   gate: {
     title: '🚪 VILLAGE GATE',
-    lines: ['Dispatch a patrol. Map patrol rewards are claimed at the Hokage Office.'],
+    lines: ['Shinobi status · dispatch available units on patrol.'],
   },
   training: {
     title: '🥷 TRAINING GROUND',
@@ -105,17 +111,17 @@ const LOC_COPY = {
     ],
   },
   store: {
-    title: '🏪 STORE',
-    lines: ['Open the shinobi store from the map.'],
+    title: '🏪 STORES',
+    lines: ['Shinobi Store · Gift Store.'],
   },
 };
 
 function homeBody() {
-  return locBody('🗺️ KONOHA MAP', ['Choose a location to explore.']);
+  return locBody('🗺️ KONOHA MAP', ['Choose a location.']);
 }
 
 function locationBody(locKey) {
-  const c = LOC_COPY[locKey] || LOC_COPY.hokage;
+  const c = LOC_COPY[locKey] || { title: 'Map', lines: [] };
   return locBody(c.title, c.lines);
 }
 
@@ -132,16 +138,197 @@ function kbFor(locKey, userId) {
   return (map[locKey] || mapKeyboard)(userId);
 }
 
-async function showScreen(chatId, messageId, user, bodyInner, keyboard) {
-  const body = mapBody(user, bodyInner);
-  if (messageId) {
-    await editMapRich(chatId, messageId, body, keyboard);
-  } else {
-    await sendMapRich(chatId, body, keyboard);
-  }
+/** Caption HTML for photo messages (no embedded tg-buttons — those use reply_markup). */
+function captionFromBody(user, bodyInner) {
+  const name = escapeHtml((user && user.first_name) || 'Shinobi');
+  const inner = String(bodyInner || '')
+    .replace(/<\/?p>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return style(`<b>${name}</b>\n\n${inner}`);
 }
 
-/** /map command — rich map home */
+/**
+ * Show map screen: prefer storage-channel photo + caption + keyboard.
+ * locKey null/'home' → main map image.
+ */
+async function showScreen(chatId, messageId, user, bodyInner, keyboard, locKey = 'home') {
+  const body = mapBody(user, bodyInner);
+  const storageId = storageIdForLocation(locKey);
+  const caption = captionFromBody(user, bodyInner);
+
+  try {
+    const result = await showMapPhoto({
+      chatId,
+      messageId,
+      storageMessageId: storageId,
+      caption,
+      replyMarkup: keyboard,
+    });
+    if (result && result.ok) return result.messageId || messageId;
+  } catch (e) {
+    console.error('[map showScreen photo]', e);
+  }
+
+  // Rich / classic text fallback
+  if (messageId) {
+    await editMapRich(chatId, messageId, body, keyboard);
+    return messageId;
+  }
+  const sent = await sendMapRich(chatId, body, keyboard);
+  return sent?.message_id || sent?.result?.message_id || null;
+}
+
+const now = () => Math.floor(Date.now() / 1000);
+
+function fmtReturn(endsAt) {
+  const left = Math.max(0, (endsAt || 0) - now());
+  if (left <= 0) return 'returning soon';
+  const m = Math.ceil(left / 60);
+  if (m < 60) return `${m}m left`;
+  const h = Math.floor(m / 60);
+  const rm = m % 60;
+  return `${h}h ${rm}m left`;
+}
+
+/** Status line for each owned shinobi at the Gate. */
+async function gateRosterLines(telegramId) {
+  const names = await ownedNames(telegramId);
+  if (!names.length) return ['No shinobi owned yet. Recruit at Stores.'];
+
+  const acts = await db.all(sql`
+    SELECT shinobi, kind, status, ends_at
+    FROM activities
+    WHERE telegram_id = ${telegramId}
+  `);
+  const actMap = Object.fromEntries(acts.map((a) => [a.shinobi, a]));
+  const bbq = await listBbqSessions(telegramId);
+  const bbqSet = new Set(bbq.map((s) => s.shinobi));
+
+  const lines = [];
+  for (const name of names) {
+    const emoji = EMO[name] || '🥷';
+    const a = actMap[name];
+    if (a && a.status === 'active') {
+      const label = a.kind === 'mission' ? 'On mission' : 'On patrol';
+      lines.push(`${emoji} <b>${escapeHtml(name)}</b> — ${label} (${fmtReturn(a.ends_at)})`);
+    } else if (bbqSet.has(name)) {
+      lines.push(`${emoji} <b>${escapeHtml(name)}</b> — At BBQ`);
+    } else {
+      lines.push(`${emoji} <b>${escapeHtml(name)}</b> — Available`);
+    }
+  }
+  return lines;
+}
+
+async function gateBody(telegramId) {
+  const lines = await gateRosterLines(telegramId);
+  return locBody('🚪 VILLAGE GATE', ['Your shinobi:', ...lines]);
+}
+
+async function clearGateSelection(telegramId) {
+  await db.run(sql`DELETE FROM map_gate_selection WHERE telegram_id = ${telegramId}`);
+}
+
+async function listGateSelection(telegramId) {
+  const rows = await db.all(sql`
+    SELECT shinobi FROM map_gate_selection WHERE telegram_id = ${telegramId}
+  `);
+  return new Set(rows.map((r) => r.shinobi));
+}
+
+async function toggleGateSelection(telegramId, shinobi) {
+  const exists = await db.get(sql`
+    SELECT 1 FROM map_gate_selection
+    WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
+  `);
+  if (exists) {
+    await db.run(sql`
+      DELETE FROM map_gate_selection
+      WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
+    `);
+    return false;
+  }
+  await db.run(sql`
+    INSERT OR IGNORE INTO map_gate_selection (telegram_id, shinobi)
+    VALUES (${telegramId}, ${shinobi})
+  `);
+  return true;
+}
+
+async function availableShinobi(telegramId) {
+  const names = await ownedNames(telegramId);
+  const acts = await db.all(sql`
+    SELECT shinobi FROM activities
+    WHERE telegram_id = ${telegramId} AND status = 'active'
+  `);
+  const busy = new Set(acts.map((a) => a.shinobi));
+  const bbq = await listBbqSessions(telegramId);
+  for (const s of bbq) busy.add(s.shinobi);
+  return names.filter((n) => !busy.has(n));
+}
+
+function patrolPickKeyboard(userId, available, selected) {
+  const rows = available.map((name) => {
+    const mark = selected.has(name) ? '✅' : '⬜️';
+    return [{
+      text: `${mark} ${EMO[name] || '🥷'} ${name}`,
+      callback_data: `map_ptog:${name}:${userId}`,
+    }];
+  });
+  rows.push([
+    { text: '🚀 Send on Patrol', callback_data: guard('map_psend', userId) },
+    { text: '✖️ Cancel', callback_data: guard('map_loc_gate', userId) },
+  ]);
+  rows.push(backToMapRow(userId));
+  return { inline_keyboard: rows };
+}
+
+async function claimRewardsBody(telegramId) {
+  const rows = await listPendingRewards(telegramId);
+  if (!rows.length) {
+    return locBody('💰 CLAIM ALL REWARDS', [
+      'No pending rewards.',
+      'Complete missions or patrols, then return here to claim.',
+    ]);
+  }
+  const mission = rows.filter((r) => (r.kind || 'patrol') === 'mission');
+  const patrol = rows.filter((r) => (r.kind || 'patrol') !== 'mission');
+  const lines = [];
+  let mTotal = 0;
+  let pTotal = 0;
+  if (mission.length) {
+    lines.push('<b>Mission rewards</b>');
+    for (const r of mission) {
+      lines.push(`${EMO[r.shinobi] || '🥷'} ${escapeHtml(r.shinobi)} → +${fmt(r.reward)} 🍥`);
+      mTotal += r.reward;
+    }
+    lines.push(`Subtotal: +${fmt(mTotal)} 🍥`);
+  }
+  if (patrol.length) {
+    lines.push('<b>Patrol rewards</b>');
+    for (const r of patrol) {
+      lines.push(`${EMO[r.shinobi] || '🥷'} ${escapeHtml(r.shinobi)} → +${fmt(r.reward)} 🍥`);
+      pTotal += r.reward;
+    }
+    lines.push(`Subtotal: +${fmt(pTotal)} 🍥`);
+  }
+  lines.push(`<b>TOTAL +${fmt(mTotal + pTotal)} 🍥</b>`);
+  lines.push('Rewards are added to your balance only when you claim.');
+  return locBody('💰 CLAIM ALL REWARDS', lines);
+}
+
+function claimRewardsKeyboard(userId, hasPending) {
+  const rows = [];
+  if (hasPending) {
+    rows.push([{ text: '✅ Claim All', callback_data: guard('map_claim_confirm', userId) }]);
+  }
+  rows.push([{ text: '◂ Back', callback_data: guard('map_loc_hokage', userId) }]);
+  rows.push(backToMapRow(userId));
+  return { inline_keyboard: rows };
+}
+
 export async function handleMapCommand(message) {
   if (!MAP_ENABLED) {
     await sendMapRich(
@@ -157,7 +344,7 @@ export async function handleMapCommand(message) {
   } catch (e) {
     console.error('[map bbq sweep]', e);
   }
-  await showScreen(message.chat.id, null, user, homeBody(), mapKeyboard(user.id));
+  await showScreen(message.chat.id, null, user, homeBody(), mapKeyboard(user.id), 'home');
 }
 
 export async function mapSweep(userId) {
@@ -174,12 +361,10 @@ function parseCb(data) {
   return { action: parts[0] || '', parts, ownerId: Number(parts[parts.length - 1]) || 0 };
 }
 
-/** True when callback_data belongs to the map subsystem. */
 export function isMapCallback(data) {
   return String(data || '').startsWith('map_');
 }
 
-/** Returns true if this callback was a map_* action. */
 export async function handleMapCallback(cb) {
   const data = String(cb.data || '');
   if (!data.startsWith('map_')) return false;
@@ -207,7 +392,7 @@ export async function handleMapCallback(cb) {
   try {
     if (action === 'map_home') {
       await answer(cb);
-      await showScreen(chatId, messageId, user, homeBody(), mapKeyboard(user.id));
+      await showScreen(chatId, messageId, user, homeBody(), mapKeyboard(user.id), 'home');
       return true;
     }
 
@@ -224,12 +409,20 @@ export async function handleMapCallback(cb) {
       const loc = locActions[action];
       await answer(cb);
       if (loc === 'bbq') {
-        try { await applyBbqRecovery(user.id); } catch (_) {}
+        try {
+          await applyBbqRecovery(user.id);
+        } catch (_) {}
       }
-      await showScreen(chatId, messageId, user, locationBody(loc), kbFor(loc, user.id));
+      let body = locationBody(loc);
+      let kb = kbFor(loc, user.id);
+      if (loc === 'gate') {
+        body = await gateBody(user.id);
+      }
+      await showScreen(chatId, messageId, user, body, kb, loc);
       return true;
     }
 
+    // --- Stores ---
     if (action === 'map_open_shinobi_store') {
       await answer(cb);
       const kb = screenKeyboard('main', user.id);
@@ -238,12 +431,35 @@ export async function handleMapCallback(cb) {
         chatId,
         messageId,
         user,
-        p('<b>🏯 SHINOBI STORE</b>') + p('Use /buy [item] after picking from the list.'),
+        p(screenText('main').replace(/\n/g, '<br>')),
         { inline_keyboard: rows },
+        'store',
       );
       return true;
     }
 
+    if (action === 'map_open_gift_store') {
+      await answer(cb);
+      try {
+        const { showCatalog } = await import('../gift.js');
+        await showCatalog(chatId);
+      } catch (e) {
+        console.error('[map gift store]', e);
+        await showScreen(
+          chatId,
+          messageId,
+          user,
+          locBody('🎁 GIFT STORE', [
+            'Could not open catalog. Try /gift_store.',
+          ]),
+          storeKeyboard(user.id),
+          'store',
+        );
+      }
+      return true;
+    }
+
+    // --- Hokage: mission hub ---
     if (action === 'map_mission_hub') {
       await answer(cb);
       const eligible = KINDS.mission.eligible;
@@ -258,20 +474,26 @@ export async function handleMapCallback(cb) {
       }
       if (!rows.length) {
         await showScreen(
-          chatId, messageId, user,
+          chatId,
+          messageId,
+          user,
           locBody('🏯 SHINOBI MISSION', [
             "You don't own a mission-eligible shinobi yet.",
-            'Recruit Sasuke or Naruto from /shinobi_store.',
+            'Recruit Sasuke or Naruto from Stores.',
           ]),
           hokageKeyboard(user.id),
+          'hokage',
         );
         return true;
       }
-      rows.push([{ text: '🔙 ʙᴀᴄᴋ', callback_data: guard('map_loc_hokage', user.id) }]);
+      rows.push([{ text: '◂ Back', callback_data: guard('map_loc_hokage', user.id) }]);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody('🏯 SHINOBI MISSION', ['Select a shinobi to dispatch.']),
         { inline_keyboard: rows },
+        'hokage',
       );
       return true;
     }
@@ -281,158 +503,196 @@ export async function handleMapCallback(cb) {
       await answer(cb);
       if (chatId > 0) {
         await showScreen(
-          chatId, messageId, user,
-          locBody('GROUP COMMAND', ['Missions work in groups only.']),
+          chatId,
+          messageId,
+          user,
+          locBody('GROUP COMMAND', ['Missions work in groups only. Use /mission in a group.']),
           hokageKeyboard(user.id),
+          'hokage',
         );
         return true;
       }
       const r = await runActivity(user, 'mission', shinobi, chatId);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         p(style(r.body).replace(/\n/g, '<br>')),
         hokageKeyboard(user.id),
+        'hokage',
       );
       return true;
     }
 
     if (action === 'map_daily') {
-      await answer(cb, 'Daily Mission coming soon.', true);
+      await answer(cb, 'Daily Quest coming soon.', true);
       return true;
     }
 
-    if (action === 'map_claim_patrol') {
+    // --- Claim all rewards ---
+    if (action === 'map_claim_rewards' || action === 'map_claim_patrol') {
       await answer(cb);
-      const pending = await listPendingPatrolRewards(user.id);
-      if (!pending.length) {
-        await showScreen(
-          chatId, messageId, user,
-          locBody('💰 PENDING PATROL', [
-            'No pending patrol rewards.',
-            'Complete a map patrol at the Village Gate first.',
-            '(Command /patrol still pays instantly.)',
-          ]),
-          hokageKeyboard(user.id),
-        );
-        return true;
-      }
-      let total = 0;
-      const lines = ['Pending rewards:'];
-      for (const row of pending) {
-        const emoji = EMO[row.shinobi] || '🥷';
-        lines.push(`${emoji} ${escapeHtml(row.shinobi)} → +${fmt(row.reward)} 🍥`);
-        total += row.reward;
-      }
-      lines.push(`TOTAL +${fmt(total)} 🍥`);
-      lines.push('Claim now?');
-      const kb = {
-        inline_keyboard: [
-          [{ text: `✅ ᴄʟᴀɪᴍ ${fmt(total)} 🍥`, callback_data: guard('map_claim_confirm', user.id) }],
-          backToMapRow(user.id),
-        ],
-      };
-      await showScreen(chatId, messageId, user, locBody('💰 PENDING PATROL REWARDS', lines), kb);
+      const rows = await listPendingRewards(user.id);
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        await claimRewardsBody(user.id),
+        claimRewardsKeyboard(user.id, rows.length > 0),
+        'hokage',
+      );
       return true;
     }
 
     if (action === 'map_claim_confirm') {
-      const result = await claimPendingPatrolRewards(user.id);
+      const result = await claimAllPendingRewards(user.id);
       if (result.code === 'none') {
         await answer(cb, 'Nothing to claim.', true);
+        await showScreen(
+          chatId,
+          messageId,
+          user,
+          await claimRewardsBody(user.id),
+          claimRewardsKeyboard(user.id, false),
+          'hokage',
+        );
         return true;
       }
-      await answer(cb);
+      await answer(cb, `Claimed +${fmt(result.total)} 🍥`, true);
+      const lines = [
+        `+${fmt(result.total)} 🍥 added to your balance.`,
+        result.missionTotal
+          ? `Mission portion: +${fmt(result.missionTotal)} 🍥`
+          : null,
+        result.patrolTotal
+          ? `Patrol portion: +${fmt(result.patrolTotal)} 🍥`
+          : null,
+      ].filter(Boolean);
       await showScreen(
-        chatId, messageId, user,
-        locBody('✅ PATROL REWARDS CLAIMED', [`+${fmt(result.total)} 🍥 added to your balance.`]),
+        chatId,
+        messageId,
+        user,
+        locBody('✅ REWARDS CLAIMED', lines),
         hokageKeyboard(user.id),
+        'hokage',
       );
       return true;
     }
 
-    if (action === 'map_patrol_select') {
+    // --- Gate: multi-select patrol ---
+    if (action === 'map_patrol_pick' || action === 'map_patrol_select') {
       await answer(cb);
-      const eligible = KINDS.patrol.eligible;
-      const own = await ownedNames(user.id);
-      const rows = [];
-      for (const name of eligible) {
-        if (!own.includes(name)) continue;
-        rows.push([{
-          text: `${EMO[name] || '🥷'} ${name}`,
-          callback_data: `map_psel:${name}:${user.id}`,
-        }]);
-      }
-      if (!rows.length) {
+      await clearGateSelection(user.id);
+      const available = await availableShinobi(user.id);
+      if (!available.length) {
         await showScreen(
-          chatId, messageId, user,
-          locBody('🚪 TEAM PATROL', [
-            'No patrol-eligible shinobi owned.',
-            'Starter Shinobi / Naruto / Hinata can patrol.',
+          chatId,
+          messageId,
+          user,
+          locBody('🚪 PATROL', [
+            'No available shinobi.',
+            'All units are on mission, patrol, or at BBQ.',
           ]),
           gateKeyboard(user.id),
+          'gate',
         );
         return true;
       }
-      rows.push([{ text: '🔙 ʙᴀᴄᴋ', callback_data: guard('map_loc_gate', user.id) }]);
       await showScreen(
-        chatId, messageId, user,
-        locBody('🚪 TEAM PATROL', [
-          'Select a shinobi.',
-          'Map patrol rewards are claimed at the Hokage Office.',
+        chatId,
+        messageId,
+        user,
+        locBody('🚪 SELECT SHINOBI', [
+          'Tap to toggle selection, then Send on Patrol.',
         ]),
-        { inline_keyboard: rows },
+        patrolPickKeyboard(user.id, available, new Set()),
+        'gate',
       );
+      return true;
+    }
+
+    if (action === 'map_ptog' && parts.length >= 3) {
+      const shinobi = parts[1];
+      await toggleGateSelection(user.id, shinobi);
+      await answer(cb);
+      const available = await availableShinobi(user.id);
+      const selected = await listGateSelection(user.id);
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🚪 SELECT SHINOBI', [
+          `Selected: ${selected.size}`,
+          'Tap to toggle, then Send on Patrol.',
+        ]),
+        patrolPickKeyboard(user.id, available, selected),
+        'gate',
+      );
+      return true;
+    }
+
+    if (action === 'map_psend') {
+      const selected = [...(await listGateSelection(user.id))];
+      if (!selected.length) {
+        await answer(cb, 'Select at least one shinobi.', true);
+        return true;
+      }
+      await answer(cb);
+      const results = [];
+      for (const shinobi of selected) {
+        const r = await runActivity(user, 'patrol', shinobi, chatId);
+        results.push(`${EMO[shinobi] || '🥷'} ${shinobi}: dispatched`);
+        // Note: runActivity pays on completion via existing flow; pending claim is for map-tracked rewards when added
+      }
+      await clearGateSelection(user.id);
+      const body = locBody('🚪 PATROL DISPATCHED', results);
+      // Return to gate roster with updated statuses
+      const roster = await gateBody(user.id);
+      await showScreen(chatId, messageId, user, roster, gateKeyboard(user.id), 'gate');
       return true;
     }
 
     if (action === 'map_psel' && parts.length >= 3) {
+      // Legacy single-select
       const shinobi = parts[1];
       await answer(cb);
-      if (chatId > 0) {
-        await showScreen(
-          chatId, messageId, user,
-          locBody('GROUP COMMAND', ['Patrol works in groups only.']),
-          gateKeyboard(user.id),
-        );
-        return true;
-      }
-      await db.run(sql`
-        INSERT INTO map_activity_source (telegram_id, shinobi, source, created_at)
-        VALUES (${user.id}, ${shinobi}, 'map', ${Math.floor(Date.now() / 1000)})
-        ON CONFLICT(telegram_id, shinobi) DO UPDATE SET
-          source = 'map', created_at = excluded.created_at
-      `);
       const r = await runActivity(user, 'patrol', shinobi, chatId);
-      let extra = '';
-      if (r.body && /DISPATCHED/i.test(r.body)) {
-        extra = p('💰 Reward will wait at the Hokage Office.');
-      }
       await showScreen(
-        chatId, messageId, user,
-        p(style(r.body).replace(/\n/g, '<br>')) + extra,
+        chatId,
+        messageId,
+        user,
+        p(style(r.body).replace(/\n/g, '<br>')),
         gateKeyboard(user.id),
+        'gate',
       );
       return true;
     }
 
+    // --- Ichiraku ---
     if (action === 'map_ichi_cat_ramen') {
       await answer(cb);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody('🍜 RAMEN MENU', [
           `Restores chakra (capped at ${MAX_CHAKRA}).`,
           'You are not charged if chakra is already full.',
         ]),
         ramenKeyboard(user.id),
+        'ichiraku',
       );
       return true;
     }
     if (action === 'map_ichi_cat_field') {
       await answer(cb);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody('⚡ FIELD MEALS', ['Prepared for your next mission or patrol.']),
         fieldMealKeyboard(user.id),
+        'ichiraku',
       );
       return true;
     }
@@ -453,12 +713,15 @@ export async function handleMapCallback(cb) {
       }
       await answer(cb);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody(`✅ ${result.emoji} ${escapeHtml(result.name)}`, [
           `−${fmt(result.cost)} 🍥`,
           `+${result.chakraGained} ⚡ → ${result.chakra}/${MAX_CHAKRA}`,
         ]),
         ichirakuKeyboard(user.id),
+        'ichiraku',
       );
       return true;
     }
@@ -475,16 +738,20 @@ export async function handleMapCallback(cb) {
       }
       await answer(cb);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody(`✅ ${result.emoji} ${escapeHtml(result.name)} prepared`, [
           `−${fmt(result.cost)} 🍥`,
           'Applies to your next mission or patrol.',
         ]),
         ichirakuKeyboard(user.id),
+        'ichiraku',
       );
       return true;
     }
 
+    // --- BBQ ---
     if (action === 'map_bbq_select') {
       await answer(cb);
       const own = await ownedNames(user.id);
@@ -500,17 +767,23 @@ export async function handleMapCallback(cb) {
       }
       if (!rows.length) {
         await showScreen(
-          chatId, messageId, user,
+          chatId,
+          messageId,
+          user,
           locBody('🍖 BBQ', ['No free shinobi to send (or none owned).']),
           bbqKeyboard(user.id),
+          'bbq',
         );
         return true;
       }
-      rows.push([{ text: '🔙 ʙᴀᴄᴋ', callback_data: guard('map_loc_bbq', user.id) }]);
+      rows.push([{ text: '◂ Back', callback_data: guard('map_loc_bbq', user.id) }]);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody('🍖 SEND TO BBQ', ['Select a shinobi.']),
         { inline_keyboard: rows },
+        'bbq',
       );
       return true;
     }
@@ -524,11 +797,14 @@ export async function handleMapCallback(cb) {
       }
       await answer(cb);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody(`🍖 ${EMO[shinobi] || '🥷'} ${escapeHtml(shinobi)} at BBQ`, [
           'Chakra recovers +20 every 30 minutes (catch-up when you open the map).',
         ]),
         bbqKeyboard(user.id),
+        'bbq',
       );
       return true;
     }
@@ -538,9 +814,12 @@ export async function handleMapCallback(cb) {
       const sessions = await listBbqSessions(user.id);
       if (!sessions.length) {
         await showScreen(
-          chatId, messageId, user,
+          chatId,
+          messageId,
+          user,
           locBody('🍖 BBQ', ['No shinobi at the BBQ.']),
           bbqKeyboard(user.id),
+          'bbq',
         );
         return true;
       }
@@ -548,11 +827,14 @@ export async function handleMapCallback(cb) {
         text: `${EMO[s.shinobi] || '🥷'} ${s.shinobi}`,
         callback_data: `map_bbq_stop:${s.shinobi}:${user.id}`,
       }]);
-      rows.push([{ text: '🔙 ʙᴀᴄᴋ', callback_data: guard('map_loc_bbq', user.id) }]);
+      rows.push([{ text: '◂ Back', callback_data: guard('map_loc_bbq', user.id) }]);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody('🏠 RECALL FROM BBQ', ['Select a shinobi.']),
         { inline_keyboard: rows },
+        'bbq',
       );
       return true;
     }
@@ -562,15 +844,18 @@ export async function handleMapCallback(cb) {
       await stopBbq(user.id, shinobi);
       await answer(cb);
       await showScreen(
-        chatId, messageId, user,
+        chatId,
+        messageId,
+        user,
         locBody(`🏠 ${EMO[shinobi] || '🥷'} ${escapeHtml(shinobi)} left BBQ`, []),
         bbqKeyboard(user.id),
+        'bbq',
       );
       return true;
     }
 
     if (action === 'map_train_sakura') {
-      await answer(cb, 'Sakura training (Tsunade) coming soon.', true);
+      await answer(cb, 'Sakura training requires Tsunade — not available yet.', true);
       return true;
     }
 
@@ -578,7 +863,9 @@ export async function handleMapCallback(cb) {
     return true;
   } catch (e) {
     console.error('[map callback]', e);
-    try { await answer(cb, 'Something went wrong.', true); } catch (_) {}
+    try {
+      await answer(cb, 'Something went wrong.', true);
+    } catch (_) {}
     return true;
   }
 }

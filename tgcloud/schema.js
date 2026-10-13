@@ -313,6 +313,21 @@ export const knownGroups = table('known_groups', {
 /** Map: pending patrol rewards (claim at Hokage Office). */
 
 /** Map: shinobi resting at BBQ for chakra recovery. */
+
+/** Map: cached Telegram photo file_ids for storage channel messages. */
+export const mapMediaCache = table('map_media_cache', {
+  storageMessageId: integer('storage_message_id').primaryKey(),
+  fileId: text('file_id').notNull(),
+});
+
+/** Map gate multi-select: shinobi marked for next patrol dispatch. */
+export const mapGateSelection = table('map_gate_selection', {
+  telegramId: integer('telegram_id').notNull(),
+  shinobi: text('shinobi').notNull(),
+}, (t) => ({
+  pk: uniqueIndex('uidx_map_gate_sel').on(t.telegramId, t.shinobi),
+}));
+
 export const bbqSessions = table('bbq_sessions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   telegramId: integer('telegram_id').notNull(),
@@ -327,6 +342,7 @@ export const pendingPatrolRewards = table('pending_patrol_rewards', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   telegramId: integer('telegram_id').notNull(),
   shinobi: text('shinobi').notNull(),
+  kind: text('kind').notNull().default('patrol'),
   reward: integer('reward').notNull().default(0),
   completedAt: integer('completed_at').notNull().default(0),
   claimed: integer('claimed').notNull().default(0),

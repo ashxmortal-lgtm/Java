@@ -158,7 +158,9 @@ export async function showMapPhoto({
 export function storageIdForLocation(locKey) {
   if (locKey == null || locKey === 'home') return MAP_IMAGE_MESSAGE_ID;
   const mid = LOCATION_IMAGES[locKey];
-  return mid != null ? mid : null;
+  // null → reuse main map image; missing key → main map image
+  if (mid == null) return MAP_IMAGE_MESSAGE_ID;
+  return mid;
 }
 
 export { MAP_IMAGE_MESSAGE_ID, MAP_IMAGE_CHAT_ID };

@@ -1,5 +1,5 @@
 /**
- * Pending patrol rewards (map-started patrols claim at Hokage).
+ * Pending mission/patrol rewards — claim only at Hokage (not auto-added to balance).
  */
 
 import { db } from 'sdk';
@@ -7,57 +7,101 @@ import { sql } from 'sdk/db';
 
 const now = () => Math.floor(Date.now() / 1000);
 
-export async function addPendingPatrolReward(telegramId, shinobi, reward) {
+/**
+ * @param {number} telegramId
+ * @param {string} shinobi
+ * @param {number} reward
+ * @param {'patrol'|'mission'} kind
+ */
+export async function addPendingReward(telegramId, shinobi, reward, kind = 'patrol') {
   const t = now();
-  // Upsert: stack reward if same shinobi still unclaimed
   const existing = await db.get(sql`
     SELECT reward FROM pending_patrol_rewards
-    WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi} AND claimed = 0
+    WHERE telegram_id = ${telegramId}
+      AND shinobi = ${shinobi}
+      AND kind = ${kind}
+      AND claimed = 0
   `);
   if (existing) {
     await db.run(sql`
       UPDATE pending_patrol_rewards
       SET reward = reward + ${reward}, completed_at = ${t}
-      WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi} AND claimed = 0
+      WHERE telegram_id = ${telegramId}
+        AND shinobi = ${shinobi}
+        AND kind = ${kind}
+        AND claimed = 0
     `);
   } else {
     await db.run(sql`
-      INSERT INTO pending_patrol_rewards (telegram_id, shinobi, reward, completed_at, claimed)
-      VALUES (${telegramId}, ${shinobi}, ${reward}, ${t}, 0)
+      INSERT INTO pending_patrol_rewards
+        (telegram_id, shinobi, kind, reward, completed_at, claimed)
+      VALUES (${telegramId}, ${shinobi}, ${kind}, ${reward}, ${t}, 0)
     `);
   }
 }
 
-export async function listPendingPatrolRewards(telegramId) {
+/** @deprecated use addPendingReward */
+export async function addPendingPatrolReward(telegramId, shinobi, reward) {
+  return addPendingReward(telegramId, shinobi, reward, 'patrol');
+}
+
+export async function listPendingRewards(telegramId) {
   return db.all(sql`
-    SELECT shinobi, reward, completed_at
+    SELECT shinobi, kind, reward, completed_at
     FROM pending_patrol_rewards
     WHERE telegram_id = ${telegramId} AND claimed = 0
-    ORDER BY completed_at
+    ORDER BY kind, completed_at
   `);
 }
 
+export async function listPendingPatrolRewards(telegramId) {
+  return listPendingRewards(telegramId);
+}
+
+/** Sum of unclaimed rewards (mission + patrol). */
+export async function pendingRewardTotal(telegramId) {
+  const row = await db.get(sql`
+    SELECT COALESCE(SUM(reward), 0) AS total
+    FROM pending_patrol_rewards
+    WHERE telegram_id = ${telegramId} AND claimed = 0
+  `);
+  return row ? Number(row.total) || 0 : 0;
+}
+
 /**
- * Claim all pending. Returns { code: 'none'|'ok', total, details }.
- * Atomic: only unclaimed rows flip to claimed.
+ * Claim all pending. Balance increases only here.
+ * Returns { code, total, missionTotal, patrolTotal, details }.
  */
-export async function claimPendingPatrolRewards(telegramId) {
-  const rows = await listPendingPatrolRewards(telegramId);
-  if (!rows.length) return { code: 'none', total: 0, details: [] };
+export async function claimAllPendingRewards(telegramId) {
+  const rows = await listPendingRewards(telegramId);
+  if (!rows.length) {
+    return { code: 'none', total: 0, missionTotal: 0, patrolTotal: 0, details: [] };
+  }
 
   let total = 0;
+  let missionTotal = 0;
+  let patrolTotal = 0;
   const details = [];
+
   for (const r of rows) {
     const won = await db.run(sql`
       UPDATE pending_patrol_rewards
       SET claimed = 1
-      WHERE telegram_id = ${telegramId} AND shinobi = ${r.shinobi} AND claimed = 0
+      WHERE telegram_id = ${telegramId}
+        AND shinobi = ${r.shinobi}
+        AND kind = ${r.kind || 'patrol'}
+        AND claimed = 0
     `);
     if (won.rowsAffected === 0) continue;
     total += r.reward;
-    details.push({ shinobi: r.shinobi, reward: r.reward });
+    if ((r.kind || 'patrol') === 'mission') missionTotal += r.reward;
+    else patrolTotal += r.reward;
+    details.push({ shinobi: r.shinobi, kind: r.kind || 'patrol', reward: r.reward });
   }
-  if (total <= 0) return { code: 'none', total: 0, details: [] };
+
+  if (total <= 0) {
+    return { code: 'none', total: 0, missionTotal: 0, patrolTotal: 0, details: [] };
+  }
 
   await db.run(sql`
     INSERT OR IGNORE INTO users (telegram_id, balance) VALUES (${telegramId}, 0)
@@ -65,5 +109,9 @@ export async function claimPendingPatrolRewards(telegramId) {
   await db.run(sql`
     UPDATE users SET balance = balance + ${total} WHERE telegram_id = ${telegramId}
   `);
-  return { code: 'ok', total, details };
+  return { code: 'ok', total, missionTotal, patrolTotal, details };
+}
+
+export async function claimPendingPatrolRewards(telegramId) {
+  return claimAllPendingRewards(telegramId);
 }

@@ -74,13 +74,15 @@ const footer = () => [
 
 export function storeContent(screen, ownerId) {
   const cb = (s) => ({ callback_data: `store:${s}:${ownerId}` });
+  const shinobiQuote = quote(SHINOBI.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
+  const jutsuQuote = quote(JUTSU.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
   if (screen === 'jutsu') {
-    return [P('🌀 𝐉𝐔𝐓𝐒𝐔'), ...JUTSU.map(item), ...footer(), row(btn('Back', cb('main')))];
+    return [P('🌀 𝐉𝐔𝐓𝐒𝐔'), jutsuQuote, ...footer(), row(btn('Back', cb('main')))];
   }
   if (screen === 'chakra') {
     return [
       P('⚡ 𝐂𝐇𝐀𝐊𝐑𝐀'),
-      P([S('✦ '), code('Chakra'), ` × 100 : ${boldNum(100 * CHAKRA_RATE)} 🍥`]),
+      quote(`✦ Chakra × 100 : ${boldNum(100 * CHAKRA_RATE)} 🍥`),
       ...footer(), row(btn('Back', cb('main'))),
     ];
   }
@@ -88,7 +90,7 @@ export function storeContent(screen, ownerId) {
     P('🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄'),
     P('ʀᴇᴄʀᴜɪᴛ ʏᴏᴜʀ ɴᴇxᴛ ꜱʜɪɴᴏʙɪ'),
     P('⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈'),
-    ...SHINOBI.map(item),
+    shinobiQuote,
     ...footer(),
     row(btn('Jutsu', cb('jutsu')), btn('Chakra', cb('chakra'))),
   ];
