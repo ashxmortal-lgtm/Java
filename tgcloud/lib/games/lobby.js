@@ -513,20 +513,34 @@ export async function cancelLobby(lobbyId, userId) {
   return { ok: true, lobby: updated };
 }
 
+async function settleExpiredXoxoTurn(lobby) {
+  if (!lobby.turn_started_at || now() - Number(lobby.turn_started_at) <= TURN_TIMEOUT_SEC) {
+    return null;
+  }
+  const turn = lobby.current_turn || 'X';
+  const winnerId = turn === 'X' ? lobby.player_o_id : lobby.player_x_id;
+  return finishLobby(lobby, RESULT_TIMEOUT, winnerId);
+}
+
+export async function expireXoxoTurn(lobbyId) {
+  const lobby = await getLobby(lobbyId);
+  if (!lobby) return { ok: false, error: 'missing' };
+  if (lobby.status !== STATUS_PLAYING || lobby.game_type !== GAME_XOXO) {
+    return { ok: false, error: 'state' };
+  }
+  const settled = await settleExpiredXoxoTurn(lobby);
+  if (!settled) return { ok: false, error: 'not_expired' };
+  return { ok: true, lobby: settled, timed: true };
+}
+
 export async function makeMove(lobbyId, userId, cell, chatId) {
   let lobby = await getLobby(lobbyId);
   if (!lobby) return { ok: false, error: 'missing' };
   if (lobby.status !== STATUS_PLAYING) return { ok: false, error: 'state' };
   if (lobby.game_type !== GAME_XOXO) return { ok: false, error: 'wrong_game' };
 
-  // timeout
-  if (lobby.turn_started_at && now() - Number(lobby.turn_started_at) > TURN_TIMEOUT_SEC) {
-    const turn = lobby.current_turn || 'X';
-    const timedOutId = turn === 'X' ? lobby.player_x_id : lobby.player_o_id;
-    const winnerId = turn === 'X' ? lobby.player_o_id : lobby.player_x_id;
-    lobby = await finishLobby(lobby, RESULT_TIMEOUT, winnerId);
-    return { ok: true, lobby, timed: true };
-  }
+  const timedOut = await settleExpiredXoxoTurn(lobby);
+  if (timedOut) return { ok: true, lobby: timedOut, timed: true };
 
   const turn = lobby.current_turn || 'X';
   const turnId = turn === 'X' ? lobby.player_x_id : lobby.player_o_id;

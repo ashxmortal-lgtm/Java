@@ -147,11 +147,10 @@ function announcement(t) {
     para('⚡ ', bold('TOPIC:'), ` ${emojiFor(t.topicText)} ${t.topicText}`),
     para('🕘 ', bold('TIME:'), ' ' + (t.scheduledTime || DEFAULT_QUIZ_TIME)),
   ];
-  if (t.showTag && (t.username || t.firstName)) {
-    const who = t.username
-      ? { type: 'url', text: '@' + t.username, url: 'https://t.me/' + t.username }
-      : { type: 'url', text: t.firstName, url: 'tg://user?id=' + t.userId };
-    b.push(para('Topic suggested by: ', who));
+  if (t.showTag && t.userId) {
+    const displayName = t.username ? '@' + t.username : (t.firstName || 'User');
+    const who = { type: 'url', text: displayName, url: 'tg://user?id=' + t.userId };
+    b.push(para('Suggested by: ', who));
   }
   b.push(divider);
   b.push(row(cb('💡 Suggest Quiz Topic', 'topic_suggest_open', 'primary')));

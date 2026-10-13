@@ -20,6 +20,11 @@ import {
 export default async function (message, ctx) {
   await notifyNewUser(message);
 
+  const gameCmd = (message.text || "").trim().split(/\s+/)[0].split("@")[0].replace(/^\/+/, "").toLowerCase();
+  if (gameCmd === "xoxo_cancel" || gameCmd === "cancel_xoxo") {
+    return await handleCancelCommand(message);
+  }
+
   if (await handleGroupReplyToBot(message)) return;
   if (await handleAdminDmReply(message)) return;
   if (await handleAnnounceText(message)) return;
@@ -39,13 +44,11 @@ export default async function (message, ctx) {
   if (await handleGiftCommand(message)) return;
   if (await handleSocialCommand(message)) return;
 
-  const gameCmd = (message.text || "").trim().split(/\s+/)[0].split("@")[0].replace(/^\/+/, "").toLowerCase();
-    if (gameCmd === "xoxo") return await handleXoxoCommand(message);
-    if (gameCmd === "rps") return await handleRpsCommand(message);
-    if (gameCmd === "games") return await handleGamesCommand(message);
-    if (gameCmd === "xoxo_cancel" || gameCmd === "cancel_xoxo") return await handleCancelCommand(message);
-    if (gameCmd === "xoxo_stats") return await handleStatsCommand(message, "xoxo");
-    if (gameCmd === "rps_stats") return await handleStatsCommand(message, "rps");
+  if (gameCmd === "xoxo") return await handleXoxoCommand(message);
+  if (gameCmd === "rps") return await handleRpsCommand(message);
+  if (gameCmd === "games") return await handleGamesCommand(message);
+  if (gameCmd === "xoxo_stats") return await handleStatsCommand(message, "xoxo");
+  if (gameCmd === "rps_stats") return await handleStatsCommand(message, "rps");
 
     const cmd = (message.text || '').split(/[\s@]/)[0].toLowerCase();
 

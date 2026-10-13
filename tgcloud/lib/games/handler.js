@@ -6,9 +6,10 @@ import { mention, style, escapeHtml } from '../texts.js';
 import { fmt } from '../store.js';
 import {
   GAME_XOXO, GAME_RPS, MIN_STAKE, COIN, STATUS_CUSTOM, STATUS_PLAYING,
+  TURN_TIMEOUT_SEC,
 } from './constants.js';
 import {
-  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby,
+  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby, expireXoxoTurn,
   acceptChallenge, startRpsMatch, cancelLobby, makeMove, rpsSubmitMove,
   rpsAdvanceReveal, getLobby, getPlayerLobbyId, clearPlayerLock, getStats,
   renderLobby, gamesListBody, gamesKeyboard, parseStake,
@@ -109,6 +110,25 @@ export async function handleCancelCommand(message) {
   const lobby = await getLobby(lid);
   if (!lobby || lobby.status === STATUS_PLAYING) {
     if (lobby?.status === STATUS_PLAYING) {
+      if ((lobby.game_type || GAME_XOXO) === GAME_XOXO) {
+        const timeout = await expireXoxoTurn(lid);
+        if (timeout.ok) {
+          if (lobby.message_id) await showLobby(chatId, lobby.message_id, timeout.lobby, user);
+          await sendGameRich(
+            chatId,
+            gameBody(user, p('XOXO turn timed out. The match was settled using the existing game rules; you can start a new lobby.')),
+            null,
+          );
+          return;
+        }
+        const timeoutMinutes = Math.ceil(TURN_TIMEOUT_SEC / 60);
+        await sendGameRich(
+          chatId,
+          gameBody(user, p(`XOXO match is still active. Its turn expires after ${timeoutMinutes} minutes; use /xoxo_cancel again after that.`)),
+          null,
+        );
+        return;
+      }
       await sendGameRich(chatId, gameBody(user, p('Match in progress — finish it or wait for timeout.')), null);
       return;
     }
