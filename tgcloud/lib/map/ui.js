@@ -1,5 +1,5 @@
 /**
- * Map keyboards + captions (mirrors Python map.py layout, no pets).
+ * Map keyboards — centered rows, labels per product spec.
  */
 
 function btn(text, data) {
@@ -11,63 +11,50 @@ export function guard(prefix, userId) {
   return `${prefix}:${userId}`;
 }
 
-const LONG = 18;
-
-function rowsPair(items) {
-  const rows = [];
-  let i = 0;
-  while (i < items.length) {
-    const [t1, d1] = items[i];
-    const long1 = t1.length >= LONG;
-    if (long1 || i + 1 >= items.length) {
-      rows.push([btn(t1, d1)]);
-      i += 1;
-      continue;
-    }
-    const [t2, d2] = items[i + 1];
-    if (t2.length >= LONG) {
-      rows.push([btn(t1, d1)]);
-      i += 1;
-      continue;
-    }
-    rows.push([btn(t1, d1), btn(t2, d2)]);
-    i += 2;
-  }
-  return rows;
-}
-
+/** Home map — 4 rows as specified. */
 export function mapKeyboard(userId) {
-  const items = [
-    ['🏯 ʜᴏᴋᴀɢᴇ', guard('map_loc_hokage', userId)],
-    ['🍜 ɪᴄʜɪʀᴀᴋᴜ', guard('map_loc_ichiraku', userId)],
-    ['🍖 ʙʙǫ', guard('map_loc_bbq', userId)],
-    ['🚪 ɢᴀᴛᴇ', guard('map_loc_gate', userId)],
-    ['🥷 ᴛʀᴀɪɴɪɴɢ', guard('map_loc_training', userId)],
-    ['♨️ ʜᴏᴛ sᴘʀɪɴɢs', guard('map_loc_hotsprings', userId)],
-    ['🏪 sᴛᴏʀᴇ', guard('map_loc_store', userId)],
-  ];
-  return { inline_keyboard: rowsPair(items) };
+  return {
+    inline_keyboard: [
+      [
+        btn('🏯 Hokage Office', guard('map_loc_hokage', userId)),
+        btn('🍖 BBQ', guard('map_loc_bbq', userId)),
+      ],
+      [
+        btn('🍜 Ichiraku Ramen', guard('map_loc_ichiraku', userId)),
+        btn('🚪 Gate', guard('map_loc_gate', userId)),
+      ],
+      [
+        btn('🥷 Training Ground', guard('map_loc_training', userId)),
+        btn('🏪 Stores', guard('map_loc_store', userId)),
+      ],
+      [btn('♨️ Hot Springs', guard('map_loc_hotsprings', userId))],
+    ],
+  };
 }
 
 export function backToMapRow(userId) {
-  return [btn('🗺 ʙᴀᴄᴋ ᴛᴏ ᴍᴀᴘ', guard('map_home', userId))];
+  return [btn('◂ Back to Map', guard('map_home', userId))];
 }
 
+/** Hokage Office */
 export function hokageKeyboard(userId) {
   return {
     inline_keyboard: [
-      [btn('🥷 sʜɪɴᴏʙɪ ᴍɪssɪᴏɴ', guard('map_mission_hub', userId))],
-      [btn('🎯 ᴅᴀɪʟʏ ᴍɪssɪᴏɴ', guard('map_daily', userId))],
-      [btn('💰 ᴄʟᴀɪᴍ ᴘᴀᴛʀᴏʟ', guard('map_claim_patrol', userId))],
+      [
+        btn('Shinobi Mission', guard('map_mission_hub', userId)),
+        btn('Daily Quest', guard('map_daily', userId)),
+      ],
+      [btn('Claim All Rewards', guard('map_claim_rewards', userId))],
       backToMapRow(userId),
     ],
   };
 }
 
+/** Gate — roster + dispatch entry */
 export function gateKeyboard(userId) {
   return {
     inline_keyboard: [
-      [btn('🚪 sᴛᴀʀᴛ ᴘᴀᴛʀᴏʟ', guard('map_patrol_select', userId))],
+      [btn('Send Available on Patrol', guard('map_patrol_pick', userId))],
       backToMapRow(userId),
     ],
   };
@@ -76,9 +63,10 @@ export function gateKeyboard(userId) {
 export function ichirakuKeyboard(userId) {
   return {
     inline_keyboard: [
-      [btn('🍜 ʀᴀᴍᴇɴ', guard('map_ichi_cat_ramen', userId))],
-      [btn('⚡ ғɪᴇʟᴅ ᴍᴇᴀʟs', guard('map_ichi_cat_field', userId))],
-      // Pet food omitted for now
+      [
+        btn('🍜 Ramen', guard('map_ichi_cat_ramen', userId)),
+        btn('⚡ Field Meals', guard('map_ichi_cat_field', userId)),
+      ],
       backToMapRow(userId),
     ],
   };
@@ -87,8 +75,10 @@ export function ichirakuKeyboard(userId) {
 export function bbqKeyboard(userId) {
   return {
     inline_keyboard: [
-      [btn('🍖 sᴇɴᴅ ᴛᴏ ʙʙǫ', guard('map_bbq_select', userId))],
-      [btn('🏠 ʀᴇᴄᴀʟʟ ғʀᴏᴍ ʙʙǫ', guard('map_bbq_recall', userId))],
+      [
+        btn('Send to BBQ', guard('map_bbq_select', userId)),
+        btn('Recall', guard('map_bbq_recall', userId)),
+      ],
       backToMapRow(userId),
     ],
   };
@@ -97,7 +87,7 @@ export function bbqKeyboard(userId) {
 export function trainingKeyboard(userId) {
   return {
     inline_keyboard: [
-      [btn('🌸 ᴛʀᴀɪɴ sᴀᴋᴜʀᴀ', guard('map_train_sakura', userId))],
+      [btn('Sakura Training', guard('map_train_sakura', userId))],
       backToMapRow(userId),
     ],
   };
@@ -109,46 +99,32 @@ export function hotspringsKeyboard(userId) {
   };
 }
 
+/** Stores hub */
 export function storeKeyboard(userId) {
   return {
     inline_keyboard: [
-      [btn('🏯 sʜɪɴᴏʙɪ sᴛᴏʀᴇ', guard('map_open_shinobi_store', userId))],
+      [
+        btn('Shinobi Store', guard('map_open_shinobi_store', userId)),
+        btn('Gift Store', guard('map_open_gift_store', userId)),
+      ],
       backToMapRow(userId),
     ],
   };
 }
 
 export function mapCaption(mentionHtml) {
-  return (
-    `🗺️ <b>KONOHA MAP</b>\n\n` +
-    `🍃 ${mentionHtml}\n` +
-    `Choose a location to explore.`
-  );
+  return `${mentionHtml}\n\n🗺️ <b>Konoha Map</b>\nChoose a location.`;
 }
 
 export function locationCaption(locKey, mentionHtml) {
-  const lines = {
-    hokage:
-      `🏯 <b>HOKAGE OFFICE</b>\n\n🍃 ${mentionHtml}\n` +
-      `🥷 Shinobi missions · 🎯 Daily Mission · 💰 patrol claims.`,
-    ichiraku:
-      `🍜 <b>ICHIRAKU RAMEN</b>\n\n🍃 ${mentionHtml}\n` +
-      `Restore chakra with ramen or prepare a Field Meal.`,
-    bbq:
-      `🍖 <b>BBQ</b>\n\n🍃 ${mentionHtml}\n` +
-      `Send shinobi here to recover chakra over time.`,
-    gate:
-      `🚪 <b>VILLAGE GATE</b>\n\n🍃 ${mentionHtml}\n` +
-      `Dispatch a team patrol. Claim rewards at the Hokage Office.`,
-    training:
-      `🥷 <b>TRAINING GROUND</b>\n\n🍃 ${mentionHtml}\n` +
-      `Sakura training (requires Tsunade) — coming soon.`,
-    hotsprings:
-      `♨️ <b>HOT SPRINGS</b>\n\n🍃 ${mentionHtml}\n` +
-      `Pet rest area — coming soon.`,
-    store:
-      `🏪 <b>STORE</b>\n\n🍃 ${mentionHtml}\n` +
-      `Open the shinobi store from the map.`,
+  const titles = {
+    hokage: '🏯 Hokage Office',
+    ichiraku: '🍜 Ichiraku Ramen',
+    bbq: '🍖 BBQ',
+    gate: '🚪 Village Gate',
+    training: '🥷 Training Ground',
+    hotsprings: '♨️ Hot Springs',
+    store: '🏪 Stores',
   };
-  return lines[locKey] || mapCaption(mentionHtml);
+  return `${mentionHtml}\n\n<b>${titles[locKey] || 'Map'}</b>`;
 }

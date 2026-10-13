@@ -28,7 +28,7 @@ export function richBtn(text, data, btnStyle = null) {
 }
 
 /** One row of rich buttons (1–8). align: left|center|right */
-export function richRow(buttonsHtml, align = 'left') {
+export function richRow(buttonsHtml, align = 'center') {
   return `<tg-button-row align="${align}">${buttonsHtml.join('')}</tg-button-row>`;
 }
 
