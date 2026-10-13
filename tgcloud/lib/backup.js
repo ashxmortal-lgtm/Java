@@ -118,6 +118,3 @@ export async function runFullBackup(requesterChatId) {
     } catch (_) {}
   }
 }
-
-
-
