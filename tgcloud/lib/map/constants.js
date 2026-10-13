@@ -18,15 +18,15 @@ export const LOCATION_IMAGES = {
   training: 45,
   gate: null,       // no dedicated image — use main map
   store: 43,
-  bbq: null,        // use main map
-  hotsprings: null, // use main map
+  bbq: null,             // use main map
+  hotsprings: null,      // use main map
 };
 
 /** Docs / logs only (not usable as sendPhoto URLs). */
 export const LOCATION_LINKS = {
-  home: 'https://t.me/c/3889508991/465',
-  hokage: 'https://t.me/c/3889508991/466',
-  ichiraku: 'https://t.me/c/3889508991/49',
+  home: "https://t.me/c/3889508991/465",
+  hokage: "https://t.me/c/3889508991/466",
+  ichiraku: "https://t.me/c/3889508991/49",
   training: 'https://t.me/c/3889508991/45',
   store: 'https://t.me/c/3889508991/43',
 };

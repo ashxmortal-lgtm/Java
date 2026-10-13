@@ -559,49 +559,7 @@ export async function handleMapCallback(cb) {
         console.error('[map gift edit]', e?.description || e);
       }
       // 2) Delete map message and open catalog as a new message
-      try {
-        try {
-          await api.deleteMessage({ chat_id: chatId, message_id: messageId });
-        } catch (_) {}
-        await showCatalog(chatId);
-        return true;
-      } catch (e2) {
-        console.error('[map gift open]', e2?.description || e2);
-        await showScreen(
-          chatId,
-          null,
-          user,
-          locBody('🎁 GIFT STORE', [
-            'Catalog failed to open. Send /gift_store in chat.',
-          ]),
-          storeKeyboard(user.id),
-          'store',
-        );
-        return true;
       }
-    }
-
-    if (action === 'map_ability') {
-      await answer(cb);
-      try {
-        await editRichOr(
-          msg,
-          user,
-          abilityContent(user.id, { fromMap: true }),
-          async () => {
-            await api.editMessageText({
-              chat_id: chatId,
-              message_id: messageId,
-              text: style(abilityText()),
-              parse_mode: 'HTML',
-              reply_markup: abilityKeyboardFromMap(user.id),
-            });
-          },
-        );
-      } catch (e) {
-        console.error('[map ability]', e);
-      }
-      return true;
     }
 
     // --- Hokage: mission hub ---
