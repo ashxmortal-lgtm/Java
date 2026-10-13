@@ -20,8 +20,12 @@ import {
   handleCustomStakeText,
 } from '../lib/games/handler.js';
 import { handleMapCommand, mapSweep } from '../lib/map/handler.js';
+import { handleSupportCommand, handleSupportMessage, handleSupportAdminReply } from '../lib/support_inbox.js';
 
 export default async function (message, ctx) {
+  if (await handleSupportCommand(message)) return;
+  if (await handleSupportAdminReply(message)) return;
+  if (await handleSupportMessage(message)) return;
   await notifyNewUser(message);
 
   const gameCmd = (message.text || '')
