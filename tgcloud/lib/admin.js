@@ -4,8 +4,8 @@ import { users } from '../schema.js';
 import { getBalance } from './economy.js';
 import { mention } from './texts.js';
 import { fmt } from './store.js';
+export { OWNER_ID } from './config.js';
 
-export const OWNER_ID = 8716863150;
 
 // Remember each user's @username so the owner can target them by name.
 export async function touchUser(user) {
