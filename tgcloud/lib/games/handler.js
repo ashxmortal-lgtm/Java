@@ -6,10 +6,9 @@ import { mention, style, escapeHtml } from '../texts.js';
 import { fmt } from '../store.js';
 import {
   GAME_XOXO, GAME_RPS, MIN_STAKE, COIN, STATUS_CUSTOM, STATUS_PLAYING,
-  TURN_TIMEOUT_SEC,
 } from './constants.js';
 import {
-  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby, expireXoxoTurn,
+  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby, abortXoxoMatch,
   acceptChallenge, startRpsMatch, cancelLobby, makeMove, rpsSubmitMove,
   rpsAdvanceReveal, getLobby, getPlayerLobbyId, clearPlayerLock, getStats,
   renderLobby, gamesListBody, gamesKeyboard, parseStake,
@@ -111,20 +110,18 @@ export async function handleCancelCommand(message) {
   if (!lobby || lobby.status === STATUS_PLAYING) {
     if (lobby?.status === STATUS_PLAYING) {
       if ((lobby.game_type || GAME_XOXO) === GAME_XOXO) {
-        const timeout = await expireXoxoTurn(lid);
-        if (timeout.ok) {
-          if (lobby.message_id) await showLobby(chatId, lobby.message_id, timeout.lobby, user);
-          await sendGameRich(
-            chatId,
-            gameBody(user, p('XOXO turn timed out. The match was settled using the existing game rules; you can start a new lobby.')),
-            null,
-          );
+        const result = await abortXoxoMatch(lid, user.id);
+        if (!result.ok) {
+          const msg = result.error === 'not_participant'
+            ? 'Only a player in this XOXO match can abort it.'
+            : 'This XOXO match is no longer active.';
+          await sendGameRich(chatId, gameBody(user, p(msg)), null);
           return;
         }
-        const timeoutMinutes = Math.ceil(TURN_TIMEOUT_SEC / 60);
+        if (lobby.message_id) await showLobby(chatId, lobby.message_id, result.lobby, user);
         await sendGameRich(
           chatId,
-          gameBody(user, p(`XOXO match is still active. Its turn expires after ${timeoutMinutes} minutes; use /xoxo_cancel again after that.`)),
+          gameBody(user, p('XOXO match aborted; both stakes have been refunded.')),
           null,
         );
         return;
@@ -301,6 +298,23 @@ export async function handleGamesCallback(cb) {
       return true;
     }
     await answer(cb);
+    await showLobby(chatId, messageId, result.lobby, user);
+    return true;
+  }
+
+  if (action === 'abort' && pfx === 'xo') {
+    const result = await abortXoxoMatch(lobbyId, user.id);
+    if (!result.ok) {
+      const map = {
+        not_participant: 'Only the two players in this match can abort it.',
+        state: 'This XOXO match is no longer active.',
+        wrong_game: 'This button is only for XOXO matches.',
+        missing: 'Match not found.',
+      };
+      await answer(cb, map[result.error] || "Can't abort this match.", true);
+      return true;
+    }
+    await answer(cb, 'Match aborted; both stakes refunded.');
     await showLobby(chatId, messageId, result.lobby, user);
     return true;
   }
