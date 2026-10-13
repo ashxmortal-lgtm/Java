@@ -438,3 +438,31 @@ export const gameTx = table('game_tx', {
   key: text('key').primaryKey(),
   createdAt: integer('created_at').notNull(),
 });
+
+// Persistent support inbox routing. Existing topics and conversation history are retained.
+export const supportConversations = table('support_conversations', {
+  userId: integer('user_id').primaryKey(),
+  // NULL only while a first-topic creation reservation is in progress.
+  threadId: integer('thread_id'),
+  status: text('status').notNull().default('stopped'),
+  displayName: text('display_name').notNull().default('User'),
+  username: text('username'),
+  lastConfirmationMessageId: integer('last_confirmation_message_id'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (t) => ({
+  thread: uniqueIndex('uidx_support_conversations_thread').on(t.threadId),
+}));
+
+// Bidirectional message IDs let an admin's topic reply quote the matching user DM.
+export const supportMessageLinks = table('support_message_links', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userId: integer('user_id').notNull(),
+  threadId: integer('thread_id').notNull(),
+  supportMessageId: integer('support_message_id').notNull(),
+  userMessageId: integer('user_message_id').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, (t) => ({
+  uniqueTopicMessage: uniqueIndex('uidx_support_message_links_topic_message').on(t.threadId, t.supportMessageId),
+  userIdx: index('idx_support_message_links_user').on(t.userId),
+}));
