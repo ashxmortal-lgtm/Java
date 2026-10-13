@@ -92,11 +92,17 @@ const LOC_COPY = {
   },
   training: {
     title: '🥷 TRAINING GROUND',
-    lines: ['Sakura training (requires Tsunade) — coming soon.'],
+    lines: [
+      'Sakura training requires Tsunade (not in the current roster).',
+      'This location is reserved for a future update.',
+    ],
   },
   hotsprings: {
     title: '♨️ HOT SPRINGS',
-    lines: ['Pet rest area — coming soon.'],
+    lines: [
+      'Pet rest is not available in this version (pets omitted).',
+      'This location is reserved for a future update.',
+    ],
   },
   store: {
     title: '🏪 STORE',
@@ -166,6 +172,11 @@ export async function mapSweep(userId) {
 function parseCb(data) {
   const parts = String(data || '').split(':');
   return { action: parts[0] || '', parts, ownerId: Number(parts[parts.length - 1]) || 0 };
+}
+
+/** True when callback_data belongs to the map subsystem. */
+export function isMapCallback(data) {
+  return String(data || '').startsWith('map_');
 }
 
 /** Returns true if this callback was a map_* action. */
