@@ -36,21 +36,15 @@ export function catalogBlocks() {
       text: "WELCOME TO INO'S GIFT STORE",
     },
     {
-      type: 'details',
-      summary: '🎁 Gift list',
-      blocks: [
-        { type: 'paragraph', text: "1. 🌹 Konan's Rose — 100 🍥" },
-        { type: 'paragraph', text: '2. 🍜 Ichiraku Ramen — 150 🍥' },
-        { type: 'paragraph', text: "3. 🥜 Anya's Peanuts — 200 🍥" },
-        { type: 'paragraph', text: "4. 🐕 Akamaru (Kiba's Puppy) — 250 🍥" },
-        { type: 'paragraph', text: "5. 🦋 Konan's Paper Butterfly — 400 🍥" },
-        { type: 'paragraph', text: '6. 👒 Straw Hat — 600 🍥' },
-        { type: 'paragraph', text: '7. 🌀 Rasengan — 700 🍥' },
-        { type: 'paragraph', text: '8. ⚡ Chidori — 800 🍥' },
-        { type: 'paragraph', text: '9. 💍 Akatsuki Ring — 1,000 🍥' },
-        { type: 'paragraph', text: '10. 👁️ Sharingan — 1,200 🍥' },
-        { type: 'paragraph', text: '11. ⭐ Starlight Anya — 1,800 🍥' },
-        { type: 'paragraph', text: "12. ⚔️ Zoro's Swords — 3,000 🍥" },
+      type: 'table',
+      is_bordered: true,
+      is_compact: true,
+      cells: [
+        [{ text: 'Gift' }, { text: 'Price' }],
+        ...GIFTS.map((g) => [
+          { text: `${g.id}. ${g.emoji} ${g.name}` },
+          { text: `${g.price.toLocaleString('en-US')} 🍥` },
+        ]),
       ],
     },
     { type: 'divider' },
@@ -92,7 +86,18 @@ export async function showCatalog(chatId) {
     try {
       const flat = [
         head("🌸 Welcome to Ino's Gift Store 💐"),
-        ...GIFTS.map((g) => para(`${g.id}. ${g.emoji} ${g.name} — ${g.price.toLocaleString('en-US')} 🍥`)),
+        {
+          type: 'table',
+          is_bordered: true,
+          is_compact: true,
+          cells: [
+            [{ text: 'Gift' }, { text: 'Price' }],
+            ...GIFTS.map((g) => [
+              { text: `${g.id}. ${g.emoji} ${g.name}` },
+              { text: `${g.price.toLocaleString('en-US')} 🍥` },
+            ]),
+          ],
+        },
         divider,
         head('🛍️ How to send a gift'),
         {

@@ -1,26 +1,34 @@
 /**
- * Map constants — storage channel message ids from t.me/c/3889508991/...
+ * Map constants — storage channel t.me/c/3889508991/<msg>
+ * Bot API cannot use private t.me/c links as HTTP image URLs.
+ * Strategy: copyMessage(from_chat_id, message_id) → cache file_id → editMessageMedia.
+ * Bot must be admin/member of the storage channel (already is).
  */
 
 export const MAP_ENABLED = true;
 
-// Storage channel that holds Konoha map / location photos
 export const MAP_IMAGE_CHAT_ID = -1003889508991;
-export const MAP_IMAGE_MESSAGE_ID = 38;
+export const MAP_IMAGE_MESSAGE_ID = 465;
 
-/**
- * Per-location storage message ids.
- * null → reuse main map image (msg 38); still edit caption for that location's menu.
- */
+/** Storage message ids. null → reuse main map image. */
 export const LOCATION_IMAGES = {
-  home: 38,
-  hokage: 42,
+  home: 465,
+  hokage: 466,
   ichiraku: 49,
   training: 45,
-  gate: 46,
+  gate: null,       // no dedicated image — use main map
   store: 43,
-  bbq: null,        // use map img
-  hotsprings: null, // use map img
+  bbq: null,        // use main map
+  hotsprings: null, // use main map
+};
+
+/** Docs / logs only (not usable as sendPhoto URLs). */
+export const LOCATION_LINKS = {
+  home: 'https://t.me/c/3889508991/465',
+  hokage: 'https://t.me/c/3889508991/466',
+  ichiraku: 'https://t.me/c/3889508991/49',
+  training: 'https://t.me/c/3889508991/45',
+  store: 'https://t.me/c/3889508991/43',
 };
 
 export const LOCATIONS = {

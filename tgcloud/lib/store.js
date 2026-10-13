@@ -1,5 +1,5 @@
 import { style } from './texts.js';
-// To add a new item later: add one line to SHINOBI or JUTSU.
+
 export const SHINOBI = [
   { name: 'Sasuke', emoji: '⚔️', price: 1500 },
   { name: 'Sakura', emoji: '🌸', price: 1900 },
@@ -59,7 +59,6 @@ export function screenText(screen) {
       FOOTER
     );
   }
-  // Larger heading + pull-quote list for shinobi
   return (
     `<b>🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄</b>\n` +
     `<i>ʀᴇᴄʀᴜɪᴛ ʏᴏᴜʀ ɴᴇxᴛ ꜱʜɪɴᴏʙɪ</i>\n\n` +
@@ -69,17 +68,37 @@ export function screenText(screen) {
   );
 }
 
-export function screenKeyboard(screen, ownerId) {
-  const cb = (s) => `store:${s}:${ownerId}`;
+/**
+ * @param {string} screen
+ * @param {number} ownerId
+ * @param {{ fromMap?: boolean }} [opts]
+ */
+export function screenKeyboard(screen, ownerId, opts = {}) {
+  const fromMap = !!opts.fromMap;
+  const storeCb = (s) => `store:${s}:${ownerId}`;
+  const mapStoreCb = (s) => `map_store:${s}:${ownerId}`;
+  const cb = fromMap ? mapStoreCb : storeCb;
+
   if (screen === 'main') {
-    return {
-      inline_keyboard: [[
+    const rows = [
+      [
         { text: style('Jutsu'), callback_data: cb('jutsu') },
         { text: style('Chakra'), callback_data: cb('chakra') },
-      ]],
-    };
+      ],
+      [{
+        text: style('Shinobi Abilities'),
+        callback_data: fromMap ? `map_ability:${ownerId}` : `lv:ab:${ownerId}`,
+      }],
+    ];
+    if (fromMap) {
+      rows.push([{ text: style('◂ Back to Map'), callback_data: `map_home:${ownerId}` }]);
+    }
+    return { inline_keyboard: rows };
   }
-  return {
-    inline_keyboard: [[{ text: style('Back'), callback_data: cb('main') }]],
-  };
+
+  const rows = [[{ text: style('Back'), callback_data: cb('main') }]];
+  if (fromMap) {
+    rows.push([{ text: style('◂ Back to Map'), callback_data: `map_home:${ownerId}` }]);
+  }
+  return { inline_keyboard: rows };
 }
