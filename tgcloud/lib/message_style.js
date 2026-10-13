@@ -14,10 +14,15 @@ const BUTTON_ACTION_FIELDS = new Set([
 const TEXT_TYPES_TO_PRESERVE = new Set([
   'code', 'pre', 'text_link', 'text_url', 'text_mention',
 ]);
+const BUTTON_STYLES = new Set(['primary', 'success', 'danger']);
 
 function styleRichHtml(html) {
   return style(html).replace(/<tg-button\b([^>]*)>/gi, (_tag, attrs) => {
+    const requestedStyle = attrs.match(/\sstyle\s*=\s*(["'])(.*?)\1/i)?.[2]?.toLowerCase();
     const withoutExistingStyle = attrs.replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, '');
+    if (requestedStyle === 'transparent') {
+      return `<tg-button${withoutExistingStyle}>`;
+    }
     return `<tg-button${withoutExistingStyle} style="primary">`;
   });
 }
@@ -54,7 +59,9 @@ function transform(value, key = '', parentType = '', inButtonList = false) {
   }
   if (button) {
     result.text = style(value.text);
-    result.style = 'primary';
+    if (value.style === 'transparent') delete result.style;
+    else if (BUTTON_STYLES.has(value.style)) result.style = value.style;
+    else result.style = 'primary';
   }
   return result;
 }

@@ -1,6 +1,7 @@
 /**
- * Map photo helpers — same storage channel as Python map.py.
- * Prefer editMessageMedia when we have a cached file_id; else copyMessage.
+ * Map photos from the private storage channel via copyMessage / file_id cache.
+ * Private t.me/c/… links are NOT public HTTP URLs — Bot API cannot sendPhoto(url) them.
+ * Strategy: copyMessage from storage → cache file_id → editMessageMedia on later navigations.
  */
 
 import { BotApiError } from 'sdk';
@@ -17,12 +18,16 @@ const memCache = new Map();
 
 async function getCachedFileId(storageMessageId) {
   if (memCache.has(storageMessageId)) return memCache.get(storageMessageId);
-  const row = await db.get(
-    sql`SELECT file_id FROM map_media_cache WHERE storage_message_id = ${storageMessageId}`,
-  );
-  if (row?.file_id) {
-    memCache.set(storageMessageId, row.file_id);
-    return row.file_id;
+  try {
+    const row = await db.get(
+      sql`SELECT file_id FROM map_media_cache WHERE storage_message_id = ${storageMessageId}`,
+    );
+    if (row?.file_id) {
+      memCache.set(storageMessageId, row.file_id);
+      return row.file_id;
+    }
+  } catch (_) {
+    /* table may not exist yet */
   }
   return null;
 }
@@ -30,14 +35,17 @@ async function getCachedFileId(storageMessageId) {
 async function putCachedFileId(storageMessageId, fileId) {
   if (!fileId) return;
   memCache.set(storageMessageId, fileId);
-  await db.run(sql`
-    INSERT INTO map_media_cache (storage_message_id, file_id)
-    VALUES (${storageMessageId}, ${fileId})
-    ON CONFLICT(storage_message_id) DO UPDATE SET file_id = excluded.file_id
-  `);
+  try {
+    await db.run(sql`
+      INSERT INTO map_media_cache (storage_message_id, file_id)
+      VALUES (${storageMessageId}, ${fileId})
+      ON CONFLICT(storage_message_id) DO UPDATE SET file_id = excluded.file_id
+    `);
+  } catch (_) {
+    /* ignore cache write failures */
+  }
 }
 
-/** Extract photo file_id from a copyMessage / sendPhoto result. */
 function extractFileId(result) {
   try {
     const msg = result?.result || result;
@@ -49,10 +57,33 @@ function extractFileId(result) {
   return null;
 }
 
+function markupOf(replyMarkup) {
+  if (replyMarkup == null) return undefined;
+  return typeof replyMarkup === 'string' ? replyMarkup : JSON.stringify(replyMarkup);
+}
+
 /**
- * Show main map or location photo.
- * Tries in-place editMessageMedia; falls back to copyMessage (new message).
- * Returns { ok, messageId } where messageId is the visible map message.
+ * Copy photo from storage channel into chat with caption + keyboard.
+ * Does not delete the previous message first (safer if copy fails).
+ */
+async function copyFromStorage(chatId, storageMessageId, caption, markup) {
+  const result = await api.copyMessage({
+    chat_id: chatId,
+    from_chat_id: MAP_IMAGE_CHAT_ID,
+    message_id: storageMessageId,
+    caption: caption || '',
+    parse_mode: 'HTML',
+    ...(markup ? { reply_markup: markup } : {}),
+  });
+  const fid = extractFileId(result);
+  if (fid) await putCachedFileId(storageMessageId, fid);
+  const newId = result?.message_id ?? result?.result?.message_id ?? null;
+  return { ok: true, messageId: newId, fileId: fid };
+}
+
+/**
+ * Show map / location photo.
+ * preferPhoto=true forces a real photo path (does not treat text-only edit as success).
  */
 export async function showMapPhoto({
   chatId,
@@ -60,16 +91,13 @@ export async function showMapPhoto({
   storageMessageId = MAP_IMAGE_MESSAGE_ID,
   caption,
   replyMarkup,
+  preferPhoto = true,
 }) {
-  const markup =
-    replyMarkup != null
-      ? typeof replyMarkup === 'string'
-        ? replyMarkup
-        : JSON.stringify(replyMarkup)
-      : undefined;
+  const markup = markupOf(replyMarkup);
+  const sid = storageMessageId || MAP_IMAGE_MESSAGE_ID;
+  const fileId = await getCachedFileId(sid);
 
-  const fileId = await getCachedFileId(storageMessageId);
-
+  // 1) In-place media swap when we already have file_id + message
   if (fileId && messageId) {
     try {
       const media = {
@@ -88,11 +116,35 @@ export async function showMapPhoto({
       return { ok: true, messageId };
     } catch (e) {
       if (!(e instanceof BotApiError)) console.error('[map editMessageMedia]', e);
+      // fall through — try caption edit on existing photo, then copy
+      try {
+        await api.editMessageCaption({
+          chat_id: chatId,
+          message_id: messageId,
+          caption: caption || '',
+          parse_mode: 'HTML',
+          ...(markup ? { reply_markup: markup } : {}),
+        });
+        return { ok: true, messageId };
+      } catch (_) {}
     }
   }
 
-  // Caption-only edit if we already have a message and no usable file_id path
-  if (messageId && !fileId) {
+  // 2) copyMessage from storage (always try when we need a photo)
+  try {
+    const copied = await copyFromStorage(chatId, sid, caption, markup);
+    if (messageId && copied.messageId) {
+      try {
+        await api.deleteMessage({ chat_id: chatId, message_id: messageId });
+      } catch (_) {}
+    }
+    return copied;
+  } catch (e) {
+    console.error('[map copyMessage]', e?.description || e?.message || e);
+  }
+
+  // 3) Fallback: edit existing message text/caption (no photo)
+  if (messageId && !preferPhoto) {
     try {
       await api.editMessageCaption({
         chat_id: chatId,
@@ -101,7 +153,7 @@ export async function showMapPhoto({
         parse_mode: 'HTML',
         ...(markup ? { reply_markup: markup } : {}),
       });
-      return { ok: true, messageId };
+      return { ok: true, messageId, noPhoto: true };
     } catch (_) {
       try {
         await api.editMessageText({
@@ -111,54 +163,40 @@ export async function showMapPhoto({
           parse_mode: 'HTML',
           ...(markup ? { reply_markup: markup } : {}),
         });
-        return { ok: true, messageId };
-      } catch (e2) {
-        if (!(e2 instanceof BotApiError)) console.error('[map edit text]', e2);
-      }
+        return { ok: true, messageId, noPhoto: true };
+      } catch (_) {}
     }
   }
 
-  // copyMessage from storage channel (seeds file_id cache)
+  // 4) Last resort plain text
   try {
     if (messageId) {
       try {
         await api.deleteMessage({ chat_id: chatId, message_id: messageId });
       } catch (_) {}
     }
-    const result = await api.copyMessage({
+    const sent = await api.sendMessage({
       chat_id: chatId,
-      from_chat_id: MAP_IMAGE_CHAT_ID,
-      message_id: storageMessageId,
-      caption: caption || '',
+      text: caption || '🗺️ Map',
       parse_mode: 'HTML',
       ...(markup ? { reply_markup: markup } : {}),
     });
-    const fid = extractFileId(result);
-    if (fid) await putCachedFileId(storageMessageId, fid);
-    const newId = result?.result?.message_id || result?.message_id || null;
-    return { ok: true, messageId: newId };
-  } catch (e) {
-    console.error('[map copyMessage]', e);
-    // Last resort: plain text
-    try {
-      const sent = await api.sendMessage({
-        chat_id: chatId,
-        text: caption || '🗺️ Map',
-        parse_mode: 'HTML',
-        ...(markup ? { reply_markup: markup } : {}),
-      });
-      return { ok: true, messageId: sent?.message_id || sent?.result?.message_id || null };
-    } catch (e2) {
-      console.error('[map sendMessage fallback]', e2);
-      return { ok: false, messageId: null };
-    }
+    return {
+      ok: true,
+      messageId: sent?.message_id ?? sent?.result?.message_id ?? null,
+      noPhoto: true,
+    };
+  } catch (e2) {
+    console.error('[map sendMessage fallback]', e2);
+    return { ok: false, messageId: null, noPhoto: true };
   }
 }
 
 export function storageIdForLocation(locKey) {
   if (locKey == null || locKey === 'home') return MAP_IMAGE_MESSAGE_ID;
   const mid = LOCATION_IMAGES[locKey];
-  return mid != null ? mid : null;
+  if (mid == null) return MAP_IMAGE_MESSAGE_ID;
+  return mid;
 }
 
 export { MAP_IMAGE_MESSAGE_ID, MAP_IMAGE_CHAT_ID };

@@ -20,6 +20,7 @@ import { levelsText, levelsContent } from './levels.js';
 import { economyLocked, ECO_LOCKED_TEXT } from './groupadmin.js';
 import { richOr, editRichOr, storeContent, abilityContent, groupOnlyContent } from './rich.js';
 import { helpText } from './help.js';
+import { profileText } from './profile.js';
 import { sendWelcome, buildUserHelpBlocks, primaryKeyboard } from './welcome_ui.js';
 
 const OWNER_HELP_EXTRA = `
@@ -196,7 +197,7 @@ export async function handleEconomyCommand(message, ctx) {
         parse_mode: 'HTML',
       });
     } else if (cmd === 'profile') {
-      await reply(message, 'Coming soon.');
+      await reply(message, await profileText(user));
     }
   } catch (e) {
     console.error(e);
