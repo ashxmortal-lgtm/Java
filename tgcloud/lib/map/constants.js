@@ -1,23 +1,33 @@
 /**
- * Map constants — storage channel + message ids match Python map.py.
- * Same private storage channel as the old bot.
+ * Map constants — storage channel t.me/c/3889508991/<msg>
+ * copyMessage uses from_chat_id + message_id (Bot API cannot fetch private t.me/c links as HTTP URLs).
  */
 
 export const MAP_ENABLED = true;
 
-// Storage channel that holds Konoha map / location photos (from map.py)
 export const MAP_IMAGE_CHAT_ID = -1003889508991;
 export const MAP_IMAGE_MESSAGE_ID = 38;
 
-/** Per-location storage message ids. null = text-only (no dedicated image). */
+/** Storage message ids. null → reuse main map image (38). */
 export const LOCATION_IMAGES = {
+  home: 38,
   hokage: 42,
   ichiraku: 49,
   training: 45,
   gate: 46,
+  store: 43,
   bbq: null,
   hotsprings: null,
-  store: null,
+};
+
+/** Human-readable links (docs / logs only — not HTTP image URLs). */
+export const LOCATION_LINKS = {
+  home: 'https://t.me/c/3889508991/38',
+  hokage: 'https://t.me/c/3889508991/42',
+  ichiraku: 'https://t.me/c/3889508991/49',
+  gate: 'https://t.me/c/3889508991/46',
+  training: 'https://t.me/c/3889508991/45',
+  store: 'https://t.me/c/3889508991/43',
 };
 
 export const LOCATIONS = {
@@ -27,10 +37,9 @@ export const LOCATIONS = {
   gate: { key: 'gate', emoji: '🚪', name: 'Village Gate' },
   training: { key: 'training', emoji: '🥷', name: 'Training Ground' },
   hotsprings: { key: 'hotsprings', emoji: '♨️', name: 'Hot Springs' },
-  store: { key: 'store', emoji: '🏪', name: 'Store' },
+  store: { key: 'store', emoji: '🏪', name: 'Stores' },
 };
 
-// Ichiraku menus (pets omitted for now)
 export const RAMEN_MENU = {
   classic: { emoji: '🍜', name: 'Basic Ramen', cost: 200, chakra: 40 },
   miso: { emoji: '🍥', name: "Naruto's Miso Ramen", cost: 250, chakra: 50 },
