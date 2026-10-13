@@ -26,11 +26,14 @@ async function answer(cb, text, alert = false) {
 
 async function showLobby(chatId, messageId, lobby, user) {
   const { body, keyboard } = renderLobby(lobby, user);
-  const html = gameBody(user, body);
+  const isXoxoBoard = (lobby.game_type || GAME_XOXO) === GAME_XOXO
+    && lobby.status === STATUS_PLAYING;
+  const html = gameBody(isXoxoBoard ? null : user, body);
+  const buttonAlign = lobby.status === STATUS_PLAYING ? 'left' : 'center';
   if (messageId) {
-    await editGameRich(chatId, messageId, html, keyboard);
+    await editGameRich(chatId, messageId, html, keyboard, buttonAlign);
   } else {
-    const sent = await sendGameRich(chatId, html, keyboard);
+    const sent = await sendGameRich(chatId, html, keyboard, {}, buttonAlign);
     const mid = sent?.message_id || sent?.result?.message_id;
     if (mid) await setLobbyMessage(lobby.lobby_id, mid);
   }

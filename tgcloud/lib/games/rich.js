@@ -19,15 +19,15 @@ export function richRow(buttons, align = 'left') {
   return `<tg-button-row align="${align}">${buttons.join('')}</tg-button-row>`;
 }
 
-export function keyboardToRich(keyboard) {
+export function keyboardToRich(keyboard, align = 'left') {
   const rows = keyboard?.inline_keyboard || [];
   return rows
-    .map((row) => richRow(row.map((b) => richBtn(b.text, b.callback_data, b.style || null))))
+    .map((row) => richRow(row.map((b) => richBtn(b.text, b.callback_data, b.style || null)), align))
     .join('');
 }
 
-export function richHtml(bodyHtml, keyboard) {
-  return `${bodyHtml || ''}${keyboard ? keyboardToRich(keyboard) : ''}`;
+export function richHtml(bodyHtml, keyboard, align = 'left') {
+  return `${bodyHtml || ''}${keyboard ? keyboardToRich(keyboard, align) : ''}`;
 }
 
 export function gameBody(user, inner) {
@@ -35,8 +35,8 @@ export function gameBody(user, inner) {
   return style(inner);
 }
 
-export async function sendGameRich(chatId, bodyHtml, keyboard, extra = {}) {
-  const html = richHtml(bodyHtml, keyboard);
+export async function sendGameRich(chatId, bodyHtml, keyboard, extra = {}, align = 'left') {
+  const html = richHtml(bodyHtml, keyboard, align);
   try {
     return await api.sendRichMessage({
       chat_id: chatId,
@@ -59,8 +59,8 @@ export async function sendGameRich(chatId, bodyHtml, keyboard, extra = {}) {
   }
 }
 
-export async function editGameRich(chatId, messageId, bodyHtml, keyboard) {
-  const html = richHtml(bodyHtml, keyboard);
+export async function editGameRich(chatId, messageId, bodyHtml, keyboard, align = 'left') {
+  const html = richHtml(bodyHtml, keyboard, align);
   try {
     await api.editMessageText({
       chat_id: chatId,

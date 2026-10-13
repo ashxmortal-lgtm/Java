@@ -659,6 +659,7 @@ export function boardKeyboard(lobby) {
         callback_data: mark || lobby.status !== STATUS_PLAYING
           ? `${pr}:noop:${lobby.lobby_id}`
           : `${pr}:cell:${lobby.lobby_id}:${i}`,
+        style: 'transparent',
       });
     }
     rows.push(row);
@@ -738,7 +739,16 @@ export function renderLobby(lobby, viewerUser = null) {
   if (lobby.status === STATUS_PLAYING) {
     if (gt === GAME_RPS) return renderRpsPlaying(lobby);
     const turn = lobby.current_turn || 'X';
-    const body = h(`${t}`) + p(`Pot: <b>${Number(lobby.pot).toLocaleString()} ${COIN}</b>`) + p(`Turn: <b>${turn}</b> ${turn === 'X' ? CELL_X : CELL_O}`) + p(lobby.board.map(glyph).join(''));
+    const isXTurn = turn === 'X';
+    const currentPlayer = {
+      id: isXTurn ? lobby.player_x_id : lobby.player_o_id,
+      first_name: isXTurn ? lobby.player_x_first_name : lobby.player_o_first_name,
+    };
+    const turnSymbol = isXTurn ? '&#88;' : '&#79;';
+    const body = p(`Turn: ${mention(currentPlayer)} ${turnSymbol}`)
+      + p(`ᴘᴏᴛ: <b>${Number(lobby.pot).toLocaleString()} ${COIN}</b>`)
+      + p(`ᴛᴜʀɴ: ${turn.toLowerCase()} ${isXTurn ? CELL_X : CELL_O}`)
+      + p(lobby.board.map(glyph).join(''));
     return { body, keyboard: boardKeyboard(lobby) };
   }
   if (lobby.status === STATUS_FINISHED) {
