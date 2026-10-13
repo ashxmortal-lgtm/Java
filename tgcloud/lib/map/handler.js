@@ -39,8 +39,13 @@ import {
   buyRamen,
   prepareFieldMeal,
 } from './ichiraku.js';
-import { sendMapRich, editMapRich, mapBody, richHtml } from './rich.js';
+import { sendMapRich, editMapRich, mapBody } from './rich.js';
 import { showMapPhoto, storageIdForLocation } from './media.js';
+import { showCatalog } from '../gift.js';
+import { storeContent, abilityContent, editRichOr, richOr } from '../rich.js';
+import { abilityText, abilityKeyboardFromMap } from '../ability.js';
+import { render } from '../texts.js';
+import { send } from '../chat.js';
 
 const EMO = {
   Sasuke: '⚔️',
@@ -194,17 +199,34 @@ function fmtReturn(endsAt) {
 
 /** Status line for each owned shinobi at the Gate. */
 async function gateRosterLines(telegramId) {
-  const names = await ownedNames(telegramId);
+  let names = [];
+  try {
+    names = await ownedNames(telegramId);
+  } catch (e) {
+    console.error('[gate owned]', e);
+    return ['Could not load inventory.'];
+  }
   if (!names.length) return ['No shinobi owned yet. Recruit at Stores.'];
 
-  const acts = await db.all(sql`
-    SELECT shinobi, kind, status, ends_at
-    FROM activities
-    WHERE telegram_id = ${telegramId}
-  `);
-  const actMap = Object.fromEntries(acts.map((a) => [a.shinobi, a]));
-  const bbq = await listBbqSessions(telegramId);
-  const bbqSet = new Set(bbq.map((s) => s.shinobi));
+  let actMap = {};
+  try {
+    const acts = await db.all(sql`
+      SELECT shinobi, kind, status, ends_at
+      FROM activities
+      WHERE telegram_id = ${telegramId}
+    `);
+    actMap = Object.fromEntries((acts || []).map((a) => [a.shinobi, a]));
+  } catch (e) {
+    console.error('[gate activities]', e);
+  }
+
+  let bbqSet = new Set();
+  try {
+    const bbq = await listBbqSessions(telegramId);
+    bbqSet = new Set((bbq || []).map((s) => s.shinobi));
+  } catch (e) {
+    console.error('[gate bbq]', e);
+  }
 
   const lines = [];
   for (const name of names) {
@@ -223,49 +245,81 @@ async function gateRosterLines(telegramId) {
 }
 
 async function gateBody(telegramId) {
-  const lines = await gateRosterLines(telegramId);
-  return locBody('🚪 VILLAGE GATE', ['Your shinobi:', ...lines]);
+  try {
+    const lines = await gateRosterLines(telegramId);
+    return locBody('🚪 VILLAGE GATE', ['Your shinobi:', ...lines]);
+  } catch (e) {
+    console.error('[gateBody]', e);
+    return locBody('🚪 VILLAGE GATE', [
+      'Shinobi status temporarily unavailable.',
+      'You can still try Send Available on Patrol.',
+    ]);
+  }
 }
 
 async function clearGateSelection(telegramId) {
-  await db.run(sql`DELETE FROM map_gate_selection WHERE telegram_id = ${telegramId}`);
+  try {
+    await db.run(sql`DELETE FROM map_gate_selection WHERE telegram_id = ${telegramId}`);
+  } catch (e) {
+    console.error('[gate clear sel]', e);
+  }
 }
 
 async function listGateSelection(telegramId) {
-  const rows = await db.all(sql`
-    SELECT shinobi FROM map_gate_selection WHERE telegram_id = ${telegramId}
-  `);
-  return new Set(rows.map((r) => r.shinobi));
+  try {
+    const rows = await db.all(sql`
+      SELECT shinobi FROM map_gate_selection WHERE telegram_id = ${telegramId}
+    `);
+    return new Set((rows || []).map((r) => r.shinobi));
+  } catch (e) {
+    console.error('[gate list sel]', e);
+    return new Set();
+  }
 }
 
 async function toggleGateSelection(telegramId, shinobi) {
-  const exists = await db.get(sql`
-    SELECT 1 FROM map_gate_selection
-    WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
-  `);
-  if (exists) {
-    await db.run(sql`
-      DELETE FROM map_gate_selection
+  try {
+    const exists = await db.get(sql`
+      SELECT 1 FROM map_gate_selection
       WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
     `);
+    if (exists) {
+      await db.run(sql`
+        DELETE FROM map_gate_selection
+        WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
+      `);
+      return false;
+    }
+    await db.run(sql`
+      INSERT OR IGNORE INTO map_gate_selection (telegram_id, shinobi)
+      VALUES (${telegramId}, ${shinobi})
+    `);
+    return true;
+  } catch (e) {
+    console.error('[gate toggle]', e);
     return false;
   }
-  await db.run(sql`
-    INSERT OR IGNORE INTO map_gate_selection (telegram_id, shinobi)
-    VALUES (${telegramId}, ${shinobi})
-  `);
-  return true;
 }
 
 async function availableShinobi(telegramId) {
-  const names = await ownedNames(telegramId);
-  const acts = await db.all(sql`
-    SELECT shinobi FROM activities
-    WHERE telegram_id = ${telegramId} AND status = 'active'
-  `);
-  const busy = new Set(acts.map((a) => a.shinobi));
-  const bbq = await listBbqSessions(telegramId);
-  for (const s of bbq) busy.add(s.shinobi);
+  let names = [];
+  try {
+    names = await ownedNames(telegramId);
+  } catch (_) {
+    return [];
+  }
+  const busy = new Set();
+  try {
+    const acts = await db.all(sql`
+      SELECT shinobi FROM activities
+      WHERE telegram_id = ${telegramId} AND status = 'active'
+    `);
+    for (const a of acts || []) busy.add(a.shinobi);
+  } catch (_) {}
+  try {
+    const bbq = await listBbqSessions(telegramId);
+    for (const s of bbq || []) busy.add(s.shinobi);
+  } catch (_) {}
   return names.filter((n) => !busy.has(n));
 }
 
@@ -423,40 +477,109 @@ export async function handleMapCallback(cb) {
     }
 
     // --- Stores ---
+    if (action === 'map_store' && parts.length >= 3) {
+      const screen = parts[1];
+      await answer(cb);
+      try {
+        await editRichOr(
+          msg,
+          user,
+          storeContent(screen, user.id, { fromMap: true }),
+          async () => {
+            const { screenText, screenKeyboard } = await import('../store.js');
+            await api.editMessageText({
+              chat_id: chatId,
+              message_id: messageId,
+              text: style(screenText(screen)),
+              parse_mode: 'HTML',
+              reply_markup: screenKeyboard(screen, user.id, { fromMap: true }),
+            });
+          },
+        );
+      } catch (e) {
+        console.error('[map_store]', e);
+      }
+      return true;
+    }
+
     if (action === 'map_open_shinobi_store') {
       await answer(cb);
-      const kb = screenKeyboard('main', user.id);
-      const rows = [...(kb.inline_keyboard || []), backToMapRow(user.id)];
-      await showScreen(
-        chatId,
-        messageId,
-        user,
-        p(screenText('main').replace(/\n/g, '<br>')),
-        { inline_keyboard: rows },
-        'store',
-      );
+      try {
+        // Prefer rich table (compact) on the current message
+        await editRichOr(
+          msg,
+          user,
+          storeContent('main', user.id, { fromMap: true }),
+          async () => {
+            const { screenText, screenKeyboard } = await import('../store.js');
+            await api.editMessageText({
+              chat_id: chatId,
+              message_id: messageId,
+              text: style(screenText('main')),
+              parse_mode: 'HTML',
+              reply_markup: screenKeyboard('main', user.id, { fromMap: true }),
+            });
+          },
+        );
+      } catch (e) {
+        console.error('[map shinobi store]', e);
+        try {
+          await richOr(
+            chatId,
+            user,
+            storeContent('main', user.id, { fromMap: true }),
+            async () => {
+              const { screenText, screenKeyboard } = await import('../store.js');
+              await api.sendMessage({
+                chat_id: chatId,
+                text: style(screenText('main')),
+                parse_mode: 'HTML',
+                reply_markup: screenKeyboard('main', user.id, { fromMap: true }),
+              });
+            },
+          );
+        } catch (e2) {
+          console.error('[map shinobi store send]', e2);
+        }
+      }
       return true;
     }
 
     if (action === 'map_open_gift_store') {
       await answer(cb);
+      // Try edit current message into gift catalog; if that fails, delete map msg and open catalog
       try {
-        const { showCatalog } = await import('../gift.js');
-        await showCatalog(chatId);
+        const { catalogBlocks } = await import('../gift.js');
+        const rich = (blocks) => ({ blocks });
+        await api.editMessageText({
+          chat_id: chatId,
+          message_id: messageId,
+          rich_message: rich(catalogBlocks()),
+        });
+        return true;
       } catch (e) {
-        console.error('[map gift store]', e);
+        console.error('[map gift edit]', e?.description || e);
+      }
+      try {
+        try {
+          await api.deleteMessage({ chat_id: chatId, message_id: messageId });
+        } catch (_) {}
+        await showCatalog(chatId);
+        return true;
+      } catch (e2) {
+        console.error('[map gift open]', e2?.description || e2);
         await showScreen(
           chatId,
-          messageId,
+          null,
           user,
           locBody('🎁 GIFT STORE', [
-            'Could not open catalog. Try /gift_store.',
+            'Catalog failed to open. Send /gift_store in chat.',
           ]),
           storeKeyboard(user.id),
           'store',
         );
+        return true;
       }
-      return true;
     }
 
     // --- Hokage: mission hub ---
@@ -851,6 +974,44 @@ export async function handleMapCallback(cb) {
         bbqKeyboard(user.id),
         'bbq',
       );
+      return true;
+    }
+
+    if (action === 'map_open_ability') {
+      await answer(cb);
+      try {
+        await editRichOr(
+          msg,
+          user,
+          abilityContent(user.id, { fromMap: true }),
+          async () => {
+            await api.editMessageText({
+              chat_id: chatId,
+              message_id: messageId,
+              text: style(abilityText()),
+              parse_mode: 'HTML',
+              reply_markup: abilityKeyboardFromMap(user.id),
+            });
+          },
+        );
+      } catch (e) {
+        console.error('[map ability]', e);
+        try {
+          await richOr(
+            chatId,
+            user,
+            abilityContent(user.id, { fromMap: true }),
+            async () => {
+              await api.sendMessage({
+                chat_id: chatId,
+                text: style(abilityText()),
+                parse_mode: 'HTML',
+                reply_markup: abilityKeyboardFromMap(user.id),
+              });
+            },
+          );
+        } catch (_) {}
+      }
       return true;
     }
 
