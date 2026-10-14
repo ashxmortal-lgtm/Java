@@ -25,7 +25,8 @@ import { handleSupportCommand, handleSupportMessage, handleSupportAdminReply } f
 export default async function (message, ctx) {
   if (await handleSupportCommand(message)) return;
   if (await handleSupportAdminReply(message)) return;
-  if (await handleSupportMessage(message)) return;
+  const supportMessageHandled = await handleSupportMessage(message);
+  if (supportMessageHandled && message.chat?.type === 'private') return;
   await notifyNewUser(message);
 
   const gameCmd = (message.text || '')

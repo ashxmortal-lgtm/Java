@@ -458,13 +458,15 @@ export const supportConversations = table('support_conversations', {
   thread: uniqueIndex('uidx_support_conversations_thread').on(t.threadId),
 }));
 
-// Bidirectional message IDs let an admin's topic reply quote the matching user DM.
+// Message IDs and optional source-chat fields route topic replies back to DMs or group messages.
 export const supportMessageLinks = table('support_message_links', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   userId: integer('user_id').notNull(),
   threadId: integer('thread_id').notNull(),
   supportMessageId: integer('support_message_id').notNull(),
   userMessageId: integer('user_message_id').notNull(),
+  sourceChatId: integer('source_chat_id'),
+  sourceThreadId: integer('source_thread_id'),
   createdAt: integer('created_at').notNull(),
 }, (t) => ({
   uniqueTopicMessage: uniqueIndex('uidx_support_message_links_topic_message').on(t.threadId, t.supportMessageId),
