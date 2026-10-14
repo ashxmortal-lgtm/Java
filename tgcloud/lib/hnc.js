@@ -3,10 +3,10 @@ import { api } from './message_api.js';
 import { frozenBloodedRow } from './universal_buttons.js';
 
 const row = (...buttons) => ({ type: 'buttons', buttons, align: 'center' });
-const para = (...text) => ({ type: 'paragraph', text: text.length === 1 ? text[0] : text });
+// Telegram's documented centered-text block is pullquote (RichBlockPullQuotation).
+const para = (...text) => ({ type: 'pullquote', text: text.length === 1 ? text[0] : text });
 const head = (text, size = 2) => ({ type: 'heading', text, size });
 const cb = (text, callback_data, style = 'primary') => ({ text, callback_data, style });
-const urlBtn = (text, url, style = 'primary') => ({ text, url, style });
 const link = (text, url) => ({ type: 'url', text, url });
 
 const VALID_PATHS = new Set([
@@ -73,8 +73,8 @@ function footer(path) {
     // Keep this branded button solo on its own long, red row on every HNC screen.
     frozenBloodedRow(),
     row(
-      cb('⬅️ Back', `hnc:back:${path.join('.')}`),
-      cb('✖️ Close', 'hnc:close'),
+      cb('‹ ʙᴀᴄᴋ', `hnc:back:${path.join('.')}`),
+      cb('ᴄʟᴏsᴇ ›', 'hnc:close'),
     ),
   ];
 }
@@ -82,9 +82,8 @@ function footer(path) {
 function contentFor(screen, user, path) {
   if (screen === 'study') {
     return [
-      head('🏯 𝐒𝐓𝐔𝐃𝐘 𝐌𝐀𝐓𝐄𝐑𝐈𝐀𝐋'),
-      para('🔒 𝐉𝐎𝐈𝐍 𝐓𝐇𝐈𝐒 𝐂𝐇𝐀𝐍𝐍𝐄𝐋 𝐅𝐈𝐑𝐒𝐓'),
-      para('(', link(STUDY_CHANNEL, STUDY_CHANNEL), ')'),
+      para('🏯 𝐒𝐓𝐔𝐃𝐘 𝐌𝐀𝐓𝐄𝐑𝐈𝐀𝐋'),
+      para(link('🔒 𝐉𝐎𝐈𝐍 𝐓𝐇𝐈𝐒 𝐂𝐇𝐀𝐍𝐍𝐄𝐋 𝐅𝐈𝐑𝐒𝐓', STUDY_CHANNEL)),
       para('ᴀғᴛᴇʀ ᴊᴏɪɴɪɴɢ, ʏᴏᴜ ᴄᴀɴ ᴏᴘᴇɴ ᴛʜᴇ ʀᴇsᴏᴜʀᴄᴇs ʙᴇʟᴏᴡ.'),
       row(
         cb('Book 📚 PDF', navData(path, 'books')),
@@ -95,25 +94,24 @@ function contentFor(screen, user, path) {
 
   if (screen === 'books') {
     const blocks = [
-      head('📚 𝐁𝐎𝐎𝐊 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐄𝐒'),
+      para('📚 𝐁𝐎𝐎𝐊 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐄𝐒'),
       para('ᴄʜᴏᴏsᴇ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ.'),
     ];
     for (const [title, url] of BOOK_LINKS) {
-      blocks.push(para(title));
-      blocks.push(row(urlBtn('➜ 𝐎𝐏𝐄𝐍 ❄️', url)));
+      blocks.push(para(title, '\n➜ ', link('𝐎𝐏𝐄𝐍 ❄️', url)));
     }
     return blocks;
   }
 
   if (screen === 'notes') {
     return [
-      head('𝐒𝐇𝐎𝐑𝐓 𝐍𝐎𝐓𝐄𝐒 (𝐒𝐍)'),
+      para('𝐒𝐇𝐎𝐑𝐓 𝐍𝐎𝐓𝐄𝐒 (𝐒𝐍)'),
       ...NOTE_LINKS.map(([label, url]) => para('✦ ', link(label, url))),
     ];
   }
 
   if (screen === 'links') {
-    const blocks = [head('𝐀𝐋𝐋 𝐆𝐑❄️𝐔𝐏𝐒 & 𝐂𝐇𝐀𝐍𝐍𝐄𝐋𝐒')];
+    const blocks = [para('𝐀𝐋𝐋 𝐆𝐑❄️𝐔𝐏𝐒 & 𝐂𝐇𝐀𝐍𝐍𝐄𝐋𝐒')];
     for (const [label, url, emoji, description] of GROUP_LINKS) {
       blocks.push(para('✦ ', link(label, url), ` ${emoji}`));
       if (description) blocks.push(para(`(${description})`));
@@ -122,13 +120,19 @@ function contentFor(screen, user, path) {
   }
 
   return [
-    para(
-      '⛩️ ᴡᴇʟᴄᴏᴍᴇ ',
-      mention(user),
-      ' ᴛᴏ\nʏᴏᴜʀ ʜɴᴄ ɴᴀᴠɪɢᴀᴛɪᴏɴ ʜᴜʙ. 🍥',
+    // Telegram heading size 1 is largest; its section-heading block has no align field.
+    head(
+      [
+        '⛩️ ᴡᴇʟᴄᴏᴍᴇ ',
+        mention(user),
+        ' ᴛᴏ\nʏᴏᴜʀ ʜɴᴄ ɴᴀᴠɪɢᴀᴛɪᴏɴ ʜᴜʙ. 🍥',
+      ],
+      1,
     ),
-    row(cb('📚 sᴛᴜᴅʏ ʀᴇsᴏᴜʀᴄᴇs', navData(path, 'study'))),
-    row(cb('🔗 ɢʀᴘ & ᴄʜɴʟ ʟɪɴᴋ', navData(path, 'links'))),
+    row(
+      cb('📚 sᴛᴜᴅʏ ʀᴇsᴏᴜʀᴄᴇs', navData(path, 'study')),
+      cb('🔗 ɢʀᴘ & ᴄʜɴʟ ʟɪɴᴋ', navData(path, 'links')),
+    ),
     para('sᴇʟᴇᴄᴛ ᴀɴ ᴏᴘᴛɪᴏɴ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ.'),
   ];
 }
