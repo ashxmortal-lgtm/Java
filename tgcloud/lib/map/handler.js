@@ -43,7 +43,7 @@ import { sendMapRich, editMapRich, mapBody } from './rich.js';
 import { showMapPhoto, storageIdForLocation } from './media.js';
 import { showCatalog, catalogBlocks } from '../gift.js';
 import { storeContent, abilityContent, editRichOr, richOr } from '../rich.js';
-import { abilityText, abilityKeyboardFromMap } from '../ability.js';
+import { abilityText, abilityKeyboard } from '../ability.js';
 import { render } from '../texts.js';
 import { send } from '../chat.js';
 
@@ -141,6 +141,16 @@ function kbFor(locKey, userId) {
     store: storeKeyboard,
   };
   return (map[locKey] || mapKeyboard)(userId);
+}
+
+function abilityKeyboardFromMap(userId) {
+  const keyboard = abilityKeyboard(userId);
+  return {
+    inline_keyboard: [
+      ...(keyboard.inline_keyboard || []),
+      backToMapRow(userId),
+    ],
+  };
 }
 
 /**
