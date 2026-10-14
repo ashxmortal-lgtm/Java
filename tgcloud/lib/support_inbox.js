@@ -1,6 +1,6 @@
 import { db } from 'sdk';
 import { eq, and } from 'sdk/db';
-import { supportConversations, supportMessageLinks } from '../schema.js';
+import { supportConversations, supportMessageLinks, topicSettings } from '../schema.js';
 import { api } from './message_api.js';
 import { ADMIN_IDS, SUPPORT_GROUP_ID, SUPPORT_USERS_TOPIC_ID } from './topic_config.js';
 import { escapeHtml } from './texts.js';
@@ -9,6 +9,7 @@ const CONFIRMATION = 'Your message has been forwarded to 𝑨𝒘𝒘 𒉭 𝒔�
 const isAuthorized = (userId) => ADMIN_IDS.includes(Number(userId));
 const nowSec = () => Math.floor(Date.now() / 1000);
 const BOT_USERNAME = 'exfrozen_bot';
+const SHARED_GROUP_TOPIC_KEY = 'support.shared_group_topic_thread_id';
 const UNBAN_COOLDOWN = 24 * 60 * 60;
 const UNBAN_PROMPT_TTL = 10 * 60;
 const TELEGRAM_MESSAGE_LINK_RE = /(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/(?:c\/\d+\/\d+(?:\/\d+)?|s\/[A-Za-z0-9_]{5,}\/\d+(?:\/\d+)?|[A-Za-z0-9_]{5,}\/\d+(?:\/\d+)?)(?:\?[^\s<>]*)?/gi;
@@ -41,6 +42,81 @@ function formatDate(timestamp) {
 async function getConversation(userId) {
   return db.select().from(supportConversations)
     .where(eq(supportConversations.userId, userId)).get();
+}
+
+async function getSharedGroupTopicThreadId() {
+  const setting = await db.select().from(topicSettings)
+    .where(eq(topicSettings.settingKey, SHARED_GROUP_TOPIC_KEY)).get();
+  const value = String(setting?.settingValue || '');
+  const threadId = Number(value);
+  return /^\d+$/.test(value) && Number.isSafeInteger(threadId) && threadId > 0 ? threadId : null;
+}
+
+async function ensureSharedGroupTopic() {
+  const now = nowSec();
+  const setting = await db.select().from(topicSettings)
+    .where(eq(topicSettings.settingKey, SHARED_GROUP_TOPIC_KEY)).get();
+  const existingThreadId = await getSharedGroupTopicThreadId();
+  if (existingThreadId) return existingThreadId;
+
+  const reservation = `creating:${now}:${Math.floor(Math.random() * 1_000_000)}`;
+  if (setting) {
+    const pending = /^creating:(\d+):/.exec(String(setting.settingValue || ''));
+    if (pending && now - Number(pending[1]) < 300) {
+      throw new Error('The shared group support topic is being created. Please retry shortly.');
+    }
+    const claimed = await db.update(topicSettings).set({ settingValue: reservation })
+      .where(and(
+        eq(topicSettings.settingKey, SHARED_GROUP_TOPIC_KEY),
+        eq(topicSettings.settingValue, setting.settingValue),
+      )).run();
+    if (!claimed.rowsAffected) {
+      const currentThreadId = await getSharedGroupTopicThreadId();
+      if (currentThreadId) return currentThreadId;
+      throw new Error('The shared group support topic is being created. Please retry shortly.');
+    }
+  } else {
+    const claimed = await db.insert(topicSettings).values({
+      settingKey: SHARED_GROUP_TOPIC_KEY,
+      settingValue: reservation,
+    }).onConflictDoNothing({ target: topicSettings.settingKey }).run();
+    if (!claimed.rowsAffected) {
+      const currentThreadId = await getSharedGroupTopicThreadId();
+      if (currentThreadId) return currentThreadId;
+      throw new Error('The shared group support topic is being created. Please retry shortly.');
+    }
+  }
+
+  try {
+    const chat = await api.getChat({ chat_id: SUPPORT_GROUP_ID });
+    if (chat.type !== 'supergroup' || chat.is_forum !== true) {
+      throw new Error('The configured support chat must be a supergroup with Topics enabled.');
+    }
+    const topic = await api.createForumTopic({ chat_id: SUPPORT_GROUP_ID, name: 'Group Messages' });
+    const threadId = Number(topic?.message_thread_id);
+    if (!Number.isSafeInteger(threadId) || threadId <= 0) {
+      throw new Error('Telegram did not return the shared group topic ID.');
+    }
+    const saved = await db.update(topicSettings).set({ settingValue: String(threadId) })
+      .where(and(
+        eq(topicSettings.settingKey, SHARED_GROUP_TOPIC_KEY),
+        eq(topicSettings.settingValue, reservation),
+      )).run();
+    if (!saved.rowsAffected) {
+      const currentThreadId = await getSharedGroupTopicThreadId();
+      if (currentThreadId) return currentThreadId;
+      throw new Error('Could not persist the shared group support topic ID.');
+    }
+    return threadId;
+  } catch (error) {
+    try {
+      await db.delete(topicSettings).where(and(
+        eq(topicSettings.settingKey, SHARED_GROUP_TOPIC_KEY),
+        eq(topicSettings.settingValue, reservation),
+      )).run();
+    } catch (_) {}
+    throw error;
+  }
 }
 
 async function saveSupportMessageLink({ userId, threadId, supportMessageId, userMessageId, sourceChatId = null, sourceThreadId = null }) {
@@ -652,18 +728,17 @@ async function handleGroupSupportMessage(message) {
       return true;
     }
 
-    const convo = await ensureConversation(message.from);
-    if (!convo?.threadId) throw new Error('Support topic is unavailable.');
+    const threadId = await ensureSharedGroupTopic();
     const forwarded = await api.forwardMessage({
       chat_id: SUPPORT_GROUP_ID,
-      message_thread_id: convo.threadId,
+      message_thread_id: threadId,
       from_chat_id: message.chat.id,
       message_id: message.message_id,
     });
     if (!forwarded?.message_id) throw new Error('Telegram did not return the forwarded message ID.');
     await saveSupportMessageLink({
       userId: message.from.id,
-      threadId: convo.threadId,
+      threadId,
       supportMessageId: forwarded.message_id,
       userMessageId: message.message_id,
       sourceChatId: message.chat.id,
@@ -673,7 +748,7 @@ async function handleGroupSupportMessage(message) {
     const name = escapeHtml(displayNameOf(message.from));
     const prompt = await api.sendMessage({
       chat_id: SUPPORT_GROUP_ID,
-      message_thread_id: convo.threadId,
+      message_thread_id: threadId,
       text: `<b>User:</b> <a href="tg://user?id=${message.from.id}">${name}</a> — reply to this message to answer in the group.`,
       parse_mode: 'HTML',
       reply_parameters: { message_id: forwarded.message_id },
@@ -682,7 +757,7 @@ async function handleGroupSupportMessage(message) {
 
     await saveSupportMessageLink({
       userId: message.from.id,
-      threadId: convo.threadId,
+      threadId,
       supportMessageId: prompt.message_id,
       userMessageId: message.message_id,
       sourceChatId: message.chat.id,
@@ -774,7 +849,7 @@ export async function handleSupportMessage(message) {
   return true;
 }
 
-async function handleLinkDirectedReply(message, convo, rawUrl) {
+async function handleLinkDirectedReply(message, context, rawUrl) {
   try {
     const target = await resolveTelegramMessageLink(rawUrl);
     const replyParameters = { message_id: target.messageId };
@@ -812,8 +887,8 @@ async function handleLinkDirectedReply(message, convo, rawUrl) {
 
     if (!result?.message_id) throw new Error('Telegram did not return the delivered message ID.');
     await saveSupportMessageLink({
-      userId: convo.userId,
-      threadId: convo.threadId,
+      userId: context.userId,
+      threadId: context.threadId,
       supportMessageId: message.message_id,
       userMessageId: result.message_id,
       sourceChatId: target.chatId,
@@ -821,16 +896,16 @@ async function handleLinkDirectedReply(message, convo, rawUrl) {
     });
     await api.sendMessage({
       chat_id: SUPPORT_GROUP_ID,
-      message_thread_id: convo.threadId,
       text: '✅ Delivered as a reply to the linked group message.',
+      message_thread_id: context.threadId,
     });
   } catch (error) {
     console.error('Link-directed group reply failed:', error?.description || error?.message || 'unknown error');
     try {
       await api.sendMessage({
         chat_id: SUPPORT_GROUP_ID,
-        message_thread_id: convo.threadId,
         text: `⚠️ Could not deliver that group reply: ${error?.description || error?.message || 'check the message link and bot permissions.'}`,
+        message_thread_id: context.threadId,
       });
     } catch (_) {}
   }
@@ -842,13 +917,16 @@ export async function handleSupportAdminReply(message) {
   if (!message.message_thread_id) return false;
 
   try {
+    const threadId = Number(message.message_thread_id);
     const convo = await db.select().from(supportConversations)
-      .where(eq(supportConversations.threadId, message.message_thread_id)).get();
-    if (!convo) return false;
+      .where(eq(supportConversations.threadId, threadId)).get();
+    const sharedGroupThreadId = convo ? null : await getSharedGroupTopicThreadId();
+    const isSharedGroupTopic = sharedGroupThreadId === threadId;
+    if (!convo && !isSharedGroupTopic) return false;
     if (!message.from || message.from.is_bot || !isAuthorized(message.from.id)) return true;
 
     const adminCommand = String(message.text || '').trim().split(/[\s@]/)[0].toLowerCase();
-    if (adminCommand === '/support_pause' || adminCommand === '/support_stop') {
+    if (convo && (adminCommand === '/support_pause' || adminCommand === '/support_stop')) {
       const status = adminCommand === '/support_pause' ? 'paused' : 'stopped';
       await db.update(supportConversations).set({ status, updatedAt: nowSec() })
         .where(eq(supportConversations.userId, convo.userId)).run();
@@ -859,31 +937,55 @@ export async function handleSupportAdminReply(message) {
       });
       return true;
     }
-    const targetLinks = telegramMessageLinks(message);
-    if (targetLinks.length > 1) {
+
+    if (!convo && (adminCommand === '/support_pause' || adminCommand === '/support_stop')) {
       await api.sendMessage({
         chat_id: SUPPORT_GROUP_ID,
-        message_thread_id: convo.threadId,
-        text: '⚠️ Include exactly one Telegram group message link in a reply.',
+        message_thread_id: threadId,
+        text: 'This is the shared group inbox; pause/stop controls are only available in a user’s DM topic.',
       });
       return true;
     }
-    if (targetLinks.length === 1) return handleLinkDirectedReply(message, convo, targetLinks[0]);
-
-    if (convo.isBanned || convo.status !== 'active') return true;
 
     let replyLink;
     const repliedToId = message.reply_to_message?.message_id;
     if (repliedToId) {
       replyLink = await db.select().from(supportMessageLinks)
         .where(and(
-          eq(supportMessageLinks.threadId, message.message_thread_id),
+          eq(supportMessageLinks.threadId, threadId),
           eq(supportMessageLinks.supportMessageId, repliedToId),
         )).get();
     }
+    const context = {
+      userId: convo?.userId ?? replyLink?.userId ?? 0,
+      threadId: convo?.threadId ?? threadId,
+    };
 
+    const targetLinks = telegramMessageLinks(message);
+    if (targetLinks.length > 1) {
+      await api.sendMessage({
+        chat_id: SUPPORT_GROUP_ID,
+        message_thread_id: context.threadId,
+        text: '⚠️ Include exactly one Telegram group message link in a reply.',
+      });
+      return true;
+    }
+    if (targetLinks.length === 1) return handleLinkDirectedReply(message, context, targetLinks[0]);
+
+    if (convo && (convo.isBanned || convo.status !== 'active')) return true;
+    if (isSharedGroupTopic && !replyLink) {
+      await api.sendMessage({
+        chat_id: SUPPORT_GROUP_ID,
+        message_thread_id: threadId,
+        text: 'Reply to a forwarded group message or its prompt, or include one Telegram message link to choose the target.',
+      });
+      return true;
+    }
+
+    const targetChatId = replyLink?.sourceChatId ?? (convo ? convo.userId : null);
+    if (targetChatId === null || targetChatId === undefined) return true;
     const result = await api.copyMessage({
-      chat_id: replyLink?.sourceChatId ?? convo.userId,
+      chat_id: targetChatId,
       ...(replyLink?.sourceThreadId ? { message_thread_id: replyLink.sourceThreadId } : {}),
       from_chat_id: message.chat.id,
       message_id: message.message_id,
@@ -891,8 +993,8 @@ export async function handleSupportAdminReply(message) {
     });
     if (result?.message_id) {
       await saveSupportMessageLink({
-        userId: convo.userId,
-        threadId: convo.threadId,
+        userId: context.userId,
+        threadId: context.threadId,
         supportMessageId: message.message_id,
         userMessageId: result.message_id,
         sourceChatId: replyLink?.sourceChatId ?? null,
@@ -902,7 +1004,7 @@ export async function handleSupportAdminReply(message) {
   } catch (error) {
     console.error('Support admin reply failed:', error?.description || error?.message || 'unknown error');
     if (message.from && isAuthorized(message.from.id)) {
-      try { await api.sendMessage({ chat_id: SUPPORT_GROUP_ID, message_thread_id: message.message_thread_id, text: 'Could not deliver that reply. The user may have blocked the bot or the message type may not be copyable.' }); } catch (_) {}
+      try { await api.sendMessage({ chat_id: SUPPORT_GROUP_ID, message_thread_id: message.message_thread_id, text: 'Could not deliver that reply. Check the target message and the bot’s permissions.' }); } catch (_) {}
     }
   }
   return true;
