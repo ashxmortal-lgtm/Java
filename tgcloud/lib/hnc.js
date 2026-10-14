@@ -3,11 +3,16 @@ import { api } from './message_api.js';
 import { frozenBloodedRow } from './universal_buttons.js';
 
 const row = (...buttons) => ({ type: 'buttons', buttons, align: 'center' });
-// Telegram's documented centered-text block is pullquote (RichBlockPullQuotation).
-const para = (...text) => ({ type: 'pullquote', text: text.length === 1 ? text[0] : text });
+const para = (...text) => ({ type: 'paragraph', text: text.length === 1 ? text[0] : text });
 const head = (text, size = 2) => ({ type: 'heading', text, size });
 const cb = (text, callback_data, style = 'primary') => ({ text, callback_data, style });
+const richButton = (text, callback_data) => ({
+  type: 'button',
+  button: { text, callback_data, style: 'primary' },
+});
 const link = (text, url) => ({ type: 'url', text, url });
+const divider = () => ({ type: 'divider' });
+const details = (summary, blocks) => ({ type: 'details', summary, blocks, is_open: false });
 
 const VALID_PATHS = new Set([
   'home',
@@ -72,29 +77,30 @@ function footer(path) {
   return [
     // Keep this branded button solo on its own long, red row on every HNC screen.
     frozenBloodedRow(),
-    row(
-      cb('‹ ʙᴀᴄᴋ', `hnc:back:${path.join('.')}`),
-      cb('ᴄʟᴏsᴇ ›', 'hnc:close'),
-    ),
+    head([
+      richButton('‹ ʙᴀᴄᴋ', `hnc:back:${path.join('.')}`),
+      '  ',
+      richButton('ᴄʟᴏsᴇ ›', 'hnc:close'),
+    ], 6),
   ];
 }
 
 function contentFor(screen, user, path) {
   if (screen === 'study') {
     return [
-      para('🏯 𝐒𝐓𝐔𝐃𝐘 𝐌𝐀𝐓𝐄𝐑𝐈𝐀𝐋'),
+      head('🏯 𝐒𝐓𝐔𝐃𝐘 𝐌𝐀𝐓𝐄𝐑𝐈𝐀𝐋', 5),
+      divider(),
       para(link('🔒 𝐉𝐎𝐈𝐍 𝐓𝐇𝐈𝐒 𝐂𝐇𝐀𝐍𝐍𝐄𝐋 𝐅𝐈𝐑𝐒𝐓', STUDY_CHANNEL)),
       para('ᴀғᴛᴇʀ ᴊᴏɪɴɪɴɢ, ʏᴏᴜ ᴄᴀɴ ᴏᴘᴇɴ ᴛʜᴇ ʀᴇsᴏᴜʀᴄᴇs ʙᴇʟᴏᴡ.'),
-      row(
-        cb('Book 📚 PDF', navData(path, 'books')),
-        cb('short ❄️ notes', navData(path, 'notes')),
-      ),
+      divider(),
+      details('Book 📚 PDF', contentFor('books', user, [...path, 'books'])),
+      details('short ❄️ notes', contentFor('notes', user, [...path, 'notes'])),
     ];
   }
 
   if (screen === 'books') {
     const blocks = [
-      para('📚 𝐁𝐎𝐎𝐊 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐄𝐒'),
+      head('📚 𝐁𝐎𝐎𝐊 𝐂𝐀𝐓𝐄𝐆𝐎𝐑𝐈𝐄𝐒', 5),
       para('ᴄʜᴏᴏsᴇ ᴀ ᴄᴀᴛᴇɢᴏʀʏ ᴛᴏ ᴄᴏɴᴛɪɴᴜᴇ.'),
     ];
     for (const [title, url] of BOOK_LINKS) {
@@ -105,18 +111,18 @@ function contentFor(screen, user, path) {
 
   if (screen === 'notes') {
     return [
-      para('𝐒𝐇𝐎𝐑𝐓 𝐍𝐎𝐓𝐄𝐒 (𝐒𝐍)'),
+      head('𝐒𝐇𝐎𝐑𝐓 𝐍𝐎𝐓𝐄𝐒 (𝐒𝐍)', 5),
       ...NOTE_LINKS.map(([label, url]) => para('✦ ', link(label, url))),
     ];
   }
 
   if (screen === 'links') {
-    const blocks = [para('𝐀𝐋𝐋 𝐆𝐑❄️𝐔𝐏𝐒 & 𝐂𝐇𝐀𝐍𝐍𝐄𝐋𝐒')];
+    const blocks = [];
     for (const [label, url, emoji, description] of GROUP_LINKS) {
       blocks.push(para('✦ ', link(label, url), ` ${emoji}`));
       if (description) blocks.push(para(`(${description})`));
     }
-    return blocks;
+    return [details('𝐀𝐋𝐋 𝐆𝐑❄️𝐔𝐏𝐒 & 𝐂𝐇𝐀𝐍𝐍𝐄𝐋𝐒', blocks)];
   }
 
   return [
