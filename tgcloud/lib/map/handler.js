@@ -41,7 +41,7 @@ import {
 } from './ichiraku.js';
 import { sendMapRich, editMapRich, mapBody } from './rich.js';
 import { showMapPhoto, storageIdForLocation } from './media.js';
-import { showCatalog } from '../gift.js';
+import { showCatalog, catalogBlocks } from '../gift.js';
 import { storeContent, abilityContent, editRichOr, richOr } from '../rich.js';
 import { abilityText, abilityKeyboardFromMap } from '../ability.js';
 import { render } from '../texts.js';
@@ -487,7 +487,6 @@ export async function handleMapCallback(cb) {
           user,
           storeContent(screen, user.id, { fromMap: true }),
           async () => {
-            const { screenText, screenKeyboard } = await import('../store.js');
             await editMapRich(chatId, messageId, style(screenText(screen)), screenKeyboard(screen, user.id, { fromMap: true }));
           },
         );
@@ -506,7 +505,6 @@ export async function handleMapCallback(cb) {
           user,
           storeContent('main', user.id, { fromMap: true }),
           async () => {
-            const { screenText, screenKeyboard } = await import('../store.js');
             await editMapRich(chatId, messageId, style(screenText('main')), screenKeyboard('main', user.id, { fromMap: true }));
           },
         );
@@ -518,7 +516,6 @@ export async function handleMapCallback(cb) {
             user,
             storeContent('main', user.id, { fromMap: true }),
             async () => {
-              const { screenText, screenKeyboard } = await import('../store.js');
               await sendMapRich(chatId, style(screenText('main')), screenKeyboard('main', user.id, { fromMap: true }));
             },
           );
@@ -533,7 +530,6 @@ export async function handleMapCallback(cb) {
       await answer(cb);
       // Try edit current message into gift catalog; if that fails, delete map msg and open catalog
       try {
-        const { catalogBlocks } = await import('../gift.js');
         const rich = (blocks) => ({ blocks });
         await api.editMessageText({
           chat_id: chatId,
