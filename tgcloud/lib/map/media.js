@@ -1,7 +1,7 @@
 /**
- * Map photos from the private storage channel via copyMessage / file_id cache.
+ * Map photos from the private storage channel via cached Telegram file_id values.
  * Private t.me/c/… links are NOT public HTTP URLs — Bot API cannot sendPhoto(url) them.
- * Strategy: copyMessage from storage → cache file_id → editMessageMedia on later navigations.
+ * Rich map messages embed the cached file_id directly into one media-bearing message.
  */
 
 import { BotApiError } from 'sdk';
@@ -55,6 +55,43 @@ function extractFileId(result) {
     }
   } catch (_) {}
   return null;
+}
+
+/**
+ * Resolve a storage photo's reusable Telegram file_id. copyMessage only returns
+ * MessageId, so on a cache miss forward once, read the returned Message.photo,
+ * then immediately delete that temporary copy before the Rich Message is sent.
+ */
+export async function getMapPhotoFileId(chatId, storageMessageId) {
+  const sid = storageMessageId || MAP_IMAGE_MESSAGE_ID;
+  const cached = await getCachedFileId(sid);
+  if (cached) return cached;
+
+  let temporaryMessageId = null;
+  let fileId = null;
+  try {
+    const forwarded = await api.forwardMessage({
+      chat_id: chatId,
+      from_chat_id: MAP_IMAGE_CHAT_ID,
+      message_id: sid,
+      disable_notification: true,
+    });
+    temporaryMessageId = forwarded?.message_id ?? forwarded?.result?.message_id ?? null;
+    fileId = extractFileId(forwarded);
+    if (fileId) await putCachedFileId(sid, fileId);
+    else console.error('[map photo file_id] forward did not return a photo', sid);
+  } catch (e) {
+    console.error('[map photo file_id]', e?.description || e?.message || e);
+  } finally {
+    if (temporaryMessageId) {
+      try {
+        await api.deleteMessage({ chat_id: chatId, message_id: temporaryMessageId });
+      } catch (e) {
+        console.error('[map photo temporary delete]', e?.description || e?.message || e);
+      }
+    }
+  }
+  return fileId;
 }
 
 function markupOf(replyMarkup) {
