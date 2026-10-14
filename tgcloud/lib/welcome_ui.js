@@ -36,11 +36,13 @@ async function botUsername() {
 
 async function primaryButtons(userId) {
   const uname = await botUsername();
-  return row(
-    urlBtn('➕ Add to Group', `https://t.me/${uname}?startgroup=true&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members`, 'success'),
-    cb('📚 Help', 'wel:help', 'primary'),
-    cb('💬 Contact Owner', `si:menu:${userId}`, 'primary'),
-  );
+  return [
+    row(
+      urlBtn('➕ Add to Group', `https://t.me/${uname}?startgroup=true&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members`, 'success'),
+      cb('📚 Help', 'wel:help', 'primary'),
+    ),
+    row(cb('💬 Contact Owner', `si:menu:${userId}`, 'primary')),
+  ];
 }
 
 export async function isRegisteredAdminAny(userId) {
@@ -76,7 +78,7 @@ export async function buildWelcomeBlocks(user) {
       divider,
       ...ownerCmdLines(),
       divider,
-      buttons,
+      ...buttons,
     ];
   }
 
@@ -93,7 +95,7 @@ export async function buildWelcomeBlocks(user) {
       ...adminCmds,
       divider,
       para('Press Help for the full user command list.'),
-      buttons,
+      ...buttons,
     ];
   }
 
@@ -107,7 +109,7 @@ export async function buildWelcomeBlocks(user) {
     para('◈ /Profile — view profile'),
     para('◈ /Inventory — view inventory'),
     divider,
-    buttons,
+    ...buttons,
   ];
 }
 
@@ -138,7 +140,7 @@ export async function sendWelcome(chatId, user) {
         para('◈ /Balance — check balance'),
         para('◈ /Profile — view profile'),
         para('◈ /Inventory — view inventory'),
-        await primaryButtons(user.id),
+        ...(await primaryButtons(user.id)),
       ];
       return await api.sendRichMessage({ chat_id: chatId, rich_message: rich(simple) });
     } catch (e2) {
@@ -205,10 +207,12 @@ export function buildUserHelp() { return 'Use /help'; }
 export async function primaryKeyboard(userId) {
   const uname = await botUsername();
   return {
-    inline_keyboard: [[
-      { text: '➕ Add to Group', url: `https://t.me/${uname}?startgroup=true&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members` },
-      { text: '📚 Help', callback_data: 'wel:help' },
-      ...(userId ? [{ text: '💬 Contact Owner', callback_data: `si:menu:${userId}` }] : []),
-    ]],
+    inline_keyboard: [
+      [
+        { text: '➕ Add to Group', url: `https://t.me/${uname}?startgroup=true&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members` },
+        { text: '📚 Help', callback_data: 'wel:help' },
+      ],
+      ...(userId ? [[{ text: '💬 Contact Owner', callback_data: `si:menu:${userId}` }]] : []),
+    ],
   };
 }

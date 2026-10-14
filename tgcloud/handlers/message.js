@@ -1,7 +1,7 @@
 import { handleStudyCommand } from '../lib/study/router.js';
 import { handleTopicCommand, handleTopicText } from '../lib/topic.js';
 import { api } from '../lib/message_api.js';
-import { menus } from '../lib/hnc.js';
+import { buildHncMenu } from '../lib/hnc.js';
 import { handleEconomyCommand } from '../lib/economy_handler.js';
 import { handleGroupAdminCommand } from '../lib/groupadmin.js';
 import { notifyNewUser } from '../lib/ownernotice.js';
@@ -84,7 +84,7 @@ export default async function (message, ctx) {
     await api.sendRichMessage({
       chat_id: message.chat.id,
       rich_message: {
-        blocks: menus.home,
+        blocks: buildHncMenu(message.from),
         skip_entity_detection: true,
       },
     });
