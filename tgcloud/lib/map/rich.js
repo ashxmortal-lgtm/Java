@@ -58,22 +58,47 @@ export function richHtml(bodyHtml, keyboard) {
   return `${body}${rows}`;
 }
 
+function inputRichMessage(bodyHtml, keyboard, mediaFileId, mediaCaption) {
+  const media = mediaFileId
+    ? [{ id: 'map_photo', media: { type: 'photo', media: mediaFileId } }]
+    : [];
+  const figure = mediaFileId
+    ? `<figure><img src="tg://photo?id=map_photo"/>${mediaCaption ? `<figcaption>${mediaCaption}</figcaption>` : ''}</figure>`
+    : '';
+  return {
+    html: `${figure}${richHtml(bodyHtml, keyboard)}`,
+    ...(media.length ? { media } : {}),
+  };
+}
+
 /**
  * Send a rich map message. If Rich Messages are unavailable, send text only;
  * map actions must never silently downgrade to ordinary inline buttons.
  * Returns the sent message object (or null).
  */
-export async function sendMapRich(chatId, bodyHtml, keyboard, extra = {}) {
-  const html = richHtml(bodyHtml, keyboard);
+export async function sendMapRich(chatId, bodyHtml, keyboard, options = {}) {
+  const { mediaFileId, mediaCaption, ...apiOptions } = options;
   try {
     return await api.sendRichMessage({
       chat_id: chatId,
-      rich_message: { html },
-      ...extra,
+      rich_message: inputRichMessage(bodyHtml, keyboard, mediaFileId, mediaCaption),
+      ...apiOptions,
     });
   } catch (e) {
     if (!(e instanceof BotApiError)) throw e;
     console.error('[map rich send fallback]', e);
+    if (mediaFileId) {
+      try {
+        return await api.sendRichMessage({
+          chat_id: chatId,
+          rich_message: inputRichMessage(bodyHtml, keyboard),
+          ...apiOptions,
+        });
+      } catch (e2) {
+        if (!(e2 instanceof BotApiError)) throw e2;
+        console.error('[map rich text-only send fallback]', e2);
+      }
+    }
     // Keep the text readable, but do not downgrade rich controls to a classic keyboard.
     const plain = bodyHtml
       .replace(/<tg-button-row[\s\S]*?<\/tg-button-row>/gi, '')
@@ -92,17 +117,29 @@ export async function sendMapRich(chatId, bodyHtml, keyboard, extra = {}) {
  * If editing rich content fails, keep the fallback text-only rather than
  * attaching a conventional keyboard.
  */
-export async function editMapRich(chatId, messageId, bodyHtml, keyboard) {
-  const html = richHtml(bodyHtml, keyboard);
+export async function editMapRich(chatId, messageId, bodyHtml, keyboard, options = {}) {
+  const { mediaFileId, mediaCaption } = options;
   try {
     await api.editMessageText({
       chat_id: chatId,
       message_id: messageId,
-      rich_message: { html },
+      rich_message: inputRichMessage(bodyHtml, keyboard, mediaFileId, mediaCaption),
     });
     return true;
   } catch (e) {
     if (!(e instanceof BotApiError)) console.error('[map rich edit]', e);
+  }
+  if (mediaFileId) {
+    try {
+      await api.editMessageText({
+        chat_id: chatId,
+        message_id: messageId,
+        rich_message: inputRichMessage(bodyHtml, keyboard),
+      });
+      return false;
+    } catch (e) {
+      if (!(e instanceof BotApiError)) console.error('[map rich text-only edit fallback]', e);
+    }
   }
   // Text-only fallback for clients/platforms that reject rich edits.
   const plain = bodyHtml
@@ -115,7 +152,7 @@ export async function editMapRich(chatId, messageId, bodyHtml, keyboard) {
       text: plain,
       parse_mode: 'HTML',
     });
-    return true;
+    return false;
   } catch (_) {}
   try {
     await api.editMessageCaption({
@@ -124,11 +161,9 @@ export async function editMapRich(chatId, messageId, bodyHtml, keyboard) {
       caption: plain,
       parse_mode: 'HTML',
     });
-    return true;
+    return false;
   } catch (e2) {
     if (!(e2 instanceof BotApiError && e2.code === 400)) console.error(e2);
-    // Last resort: new rich message
-    await sendMapRich(chatId, bodyHtml, keyboard);
     return false;
   }
 }

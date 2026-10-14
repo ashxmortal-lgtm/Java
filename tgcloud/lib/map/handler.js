@@ -40,7 +40,7 @@ import {
   prepareFieldMeal,
 } from './ichiraku.js';
 import { sendMapRich, editMapRich, mapBody } from './rich.js';
-import { showMapPhoto, storageIdForLocation } from './media.js';
+import { getMapPhotoFileId, storageIdForLocation } from './media.js';
 import { showCatalog, catalogBlocks } from '../gift.js';
 import { storeContent, abilityContent, editRichOr, richOr } from '../rich.js';
 import { abilityText, abilityKeyboard } from '../ability.js';
@@ -153,43 +153,27 @@ function abilityKeyboardFromMap(userId) {
   };
 }
 
-/**
- * Keep the map artwork as a photo, but render all controls in a rich-message
- * panel replied to that photo. The callback message carries the photo reply ID.
- */
+/** Render the map photo, screen content and rich controls as one editable message. */
 async function showScreen(chatId, panelMessageId, user, bodyInner, keyboard, locKey = 'home') {
   const body = mapBody(user, bodyInner);
   const storageId = storageIdForLocation(locKey);
   const caption = style('<b>🗺️ KONOHA MAP</b>');
-  const previousPhotoId = Number(user?._mapPhotoMessageId) || null;
-  let photoId = previousPhotoId;
+  const photoFileId = await getMapPhotoFileId(chatId, storageId);
+  const mediaOptions = { mediaFileId: photoFileId, mediaCaption: caption };
+  const legacyPhotoId = user?._mapHasRichPanel
+    ? Number(user?._mapPhotoMessageId) || null
+    : null;
 
-  try {
-    const result = await showMapPhoto({
-      chatId,
-      messageId: previousPhotoId,
-      storageMessageId: storageId,
-      caption,
-      replyMarkup: { inline_keyboard: [] },
-    });
-    if (result?.ok) photoId = result.messageId || previousPhotoId;
-  } catch (e) {
-    console.error('[map showScreen photo]', e);
-  }
-
-  // A rich panel is edited in place when its photo could also be edited in place.
-  if (panelMessageId && user?._mapHasRichPanel && previousPhotoId && photoId === previousPhotoId) {
-    await editMapRich(chatId, panelMessageId, body, keyboard);
+  if (panelMessageId) {
+    const editedWithPhoto = await editMapRich(chatId, panelMessageId, body, keyboard, mediaOptions);
+    if (editedWithPhoto && photoFileId && legacyPhotoId && legacyPhotoId !== panelMessageId) {
+      try { await api.deleteMessage({ chat_id: chatId, message_id: legacyPhotoId }); } catch (_) {}
+    }
     return panelMessageId;
   }
 
-  const sent = await sendMapRich(chatId, body, keyboard, photoId
-    ? { reply_to_message_id: photoId }
-    : {});
-  if (panelMessageId && user?._mapHasRichPanel) {
-    try { await api.deleteMessage({ chat_id: chatId, message_id: panelMessageId }); } catch (_) {}
-  }
-  return sent?.message_id || sent?.result?.message_id || panelMessageId || null;
+  const sent = await sendMapRich(chatId, body, keyboard, mediaOptions);
+  return sent?.message_id || sent?.result?.message_id || null;
 }
 
 const now = () => Math.floor(Date.now() / 1000);
