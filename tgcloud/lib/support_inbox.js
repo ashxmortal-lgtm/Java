@@ -8,8 +8,10 @@ import { escapeHtml } from './texts.js';
 const CONFIRMATION = 'Your message has been forwarded to 𝑨𝒘𝒘 𒉭 𝒔𝒉𝒆𝒆𝒔𝒉. Please wait for a reply.';
 const isAuthorized = (userId) => ADMIN_IDS.includes(Number(userId));
 const nowSec = () => Math.floor(Date.now() / 1000);
+const BOT_USERNAME = 'exfrozen_bot';
 const UNBAN_COOLDOWN = 24 * 60 * 60;
 const UNBAN_PROMPT_TTL = 10 * 60;
+const TELEGRAM_MESSAGE_LINK_RE = /(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/(?:c\/\d+\/\d+(?:\/\d+)?|s\/[A-Za-z0-9_]{5,}\/\d+(?:\/\d+)?|[A-Za-z0-9_]{5,}\/\d+(?:\/\d+)?)(?:\?[^\s<>]*)?/gi;
 
 function supportReady() {
   return Number.isSafeInteger(SUPPORT_GROUP_ID) && SUPPORT_GROUP_ID < 0;
@@ -41,18 +43,121 @@ async function getConversation(userId) {
     .where(eq(supportConversations.userId, userId)).get();
 }
 
-function banControlHtml(userId, isBanned) {
+async function saveSupportMessageLink({ userId, threadId, supportMessageId, userMessageId, sourceChatId = null, sourceThreadId = null }) {
+  return db.run(
+    'INSERT OR IGNORE INTO support_message_links (user_id, thread_id, support_message_id, user_message_id, source_chat_id, source_thread_id, created_at) VALUES (:user, :thread, :support, :original, :source_chat, :source_thread, :created)',
+    {
+      ':user': userId,
+      ':thread': threadId,
+      ':support': supportMessageId,
+      ':original': userMessageId,
+      ':source_chat': sourceChatId,
+      ':source_thread': sourceThreadId,
+      ':created': nowSec(),
+    },
+  );
+}
+
+function isGroupMessage(message) {
+  return message.chat?.type === 'group' || message.chat?.type === 'supergroup';
+}
+
+function isSupportTrigger(message) {
+  const body = String(message.text || message.caption || '');
+  const mention = new RegExp(`@${BOT_USERNAME}(?![A-Za-z0-9_])`, 'i').test(body);
+  const repliedBot = message.reply_to_message?.from?.is_bot === true
+    || String(message.reply_to_message?.from?.username || '').toLowerCase() === BOT_USERNAME;
+  return mention || repliedBot;
+}
+
+function parseTelegramMessageLink(rawUrl) {
+  const cleaned = String(rawUrl || '').trim().replace(/[),.!?;:]+$/g, '');
+  if (!cleaned) return null;
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`);
+  } catch (_) {
+    return null;
+  }
+  const host = url.hostname.toLowerCase().replace(/^www\./, '');
+  if (host !== 't.me' && host !== 'telegram.me') return null;
+  const parts = url.pathname.split('/').filter(Boolean);
+  let username;
+  let tail;
+  let chatId;
+  if (parts[0]?.toLowerCase() === 'c') {
+    const internalId = parts[1];
+    tail = parts.slice(2);
+    if (!/^\d+$/.test(internalId || '') || (tail.length !== 1 && tail.length !== 2)) return null;
+    chatId = Number(`-100${internalId}`);
+  } else {
+    let start = 0;
+    if (parts[0]?.toLowerCase() === 's') start = 1;
+    username = parts[start];
+    tail = parts.slice(start + 1);
+    if (!/^[A-Za-z0-9_]{5,32}$/.test(username || '') || (tail.length !== 1 && tail.length !== 2)) return null;
+  }
+  if (!tail.every((part) => /^\d+$/.test(part))) return null;
+  const queryThreadId = url.searchParams.get('thread');
+  const messageId = Number(tail[tail.length - 1]);
+  const threadId = tail.length === 2 ? Number(tail[0]) : queryThreadId && /^\d+$/.test(queryThreadId) ? Number(queryThreadId) : null;
+  if (!Number.isSafeInteger(messageId) || messageId <= 0) return null;
+  if (threadId !== null && (!Number.isSafeInteger(threadId) || threadId <= 0)) return null;
+  if (chatId !== undefined && !Number.isSafeInteger(chatId)) return null;
+  return { ...(username ? { username } : {}), ...(chatId !== undefined ? { chatId } : {}), messageId, ...(threadId ? { threadId } : {}) };
+}
+
+function telegramMessageLinks(message) {
+  const body = String(message.text || message.caption || '');
+  const matcher = new RegExp(TELEGRAM_MESSAGE_LINK_RE.source, 'gi');
+  const visible = [...body.matchAll(matcher)].map((match) => match[0]);
+  const entities = [...(message.entities || []), ...(message.caption_entities || [])]
+    .filter((entity) => entity.type === 'text_link' && entity.url)
+    .map((entity) => entity.url);
+  return [...new Set([...visible, ...entities].filter((url) => parseTelegramMessageLink(url)))];
+}
+
+function removeTelegramMessageLinks(text) {
+  const matcher = new RegExp(TELEGRAM_MESSAGE_LINK_RE.source, 'gi');
+  return String(text || '').replace(matcher, ' ').replace(/[ \t]{2,}/g, ' ').replace(/\n[ \t]+/g, '\n').trim();
+}
+
+async function resolveTelegramMessageLink(rawUrl) {
+  const target = parseTelegramMessageLink(rawUrl);
+  if (!target) throw new Error('The Telegram message link format is not supported.');
+  const chat = target.chatId
+    ? await api.getChat({ chat_id: target.chatId })
+    : await api.getChat({ chat_id: `@${target.username}` });
+  const chatId = target.chatId || chat?.id;
+  if (!Number.isSafeInteger(Number(chatId)) || (chat?.type !== 'group' && chat?.type !== 'supergroup')) {
+    throw new Error('The link must point to a group or supergroup that the bot can access.');
+  }
+  if (Number(chatId) === SUPPORT_GROUP_ID) throw new Error('Choose a message from the destination group, not the support inbox.');
+  return { chatId: Number(chatId), threadId: target.threadId || null, messageId: target.messageId };
+}
+
+const para = (...text) => ({ type: 'paragraph', text: text.length === 1 ? text[0] : text });
+const bold = (text) => ({ type: 'bold', text });
+
+function topicIntroBlocks(userId, displayName, username, createdAt, isBanned) {
+  const name = displayName || 'User';
+  const stamp = Number(createdAt || nowSec());
+  const userMention = {
+    type: 'text_mention',
+    text: name,
+    user: { id: userId, is_bot: false, first_name: name, ...(username ? { username } : {}) },
+  };
   const label = isBanned ? '✅ Unban' : '🚫 Ban';
   const action = isBanned ? 'unban' : 'ban';
   const style = isBanned ? 'success' : 'danger';
-  return `<tg-button-row align="center"><tg-button type="callback_data" style="${style}" data="si:${action}:${userId}">${label}</tg-button></tg-button-row>`;
-}
-
-function topicIntroHtml(userId, displayName, username, createdAt, isBanned) {
-  const name = escapeHtml(displayName || 'User');
-  const handle = username ? `@${escapeHtml(username)}` : '';
-  const stamp = Number(createdAt || nowSec());
-  return `<p><b>#newmsg</b></p><p><b>User:</b> <a href="tg://user?id=${userId}">${name}</a></p><p><b>Username:</b> ${handle}</p><p><b>User ID:</b> <code>${userId}</code></p><p><b>Date:</b> <tg-time unix="${stamp}" format="wDT">${escapeHtml(formatDate(stamp))}</tg-time></p>${banControlHtml(userId, !!isBanned)}`;
+  return [
+    para(bold('#newmsg')),
+    para(bold('User: '), userMention),
+    para(bold('Username: '), username ? `@${username}` : ''),
+    para(bold('User ID: '), { type: 'code', text: String(userId) }),
+    para(bold('Date: '), formatDate(stamp)),
+    { type: 'buttons', align: 'center', buttons: [{ text: label, callback_data: `si:${action}:${userId}`, style }] },
+  ];
 }
 
 async function ensureTopicIntro(userId, convo) {
@@ -70,7 +175,7 @@ async function ensureTopicIntro(userId, convo) {
       chat_id: SUPPORT_GROUP_ID,
       message_thread_id: convo.threadId,
       rich_message: {
-        html: topicIntroHtml(userId, convo.displayName, convo.username, convo.createdAt, convo.isBanned),
+        blocks: topicIntroBlocks(userId, convo.displayName, convo.username, convo.createdAt, convo.isBanned),
       },
     });
     if (!sent?.message_id) throw new Error('Telegram did not return the new-message control ID.');
@@ -91,7 +196,7 @@ async function refreshTopicIntro(userId, convo) {
       chat_id: SUPPORT_GROUP_ID,
       message_id: convo.introMessageId,
       rich_message: {
-        html: topicIntroHtml(userId, convo.displayName, convo.username, convo.createdAt, convo.isBanned),
+        blocks: topicIntroBlocks(userId, convo.displayName, convo.username, convo.createdAt, convo.isBanned),
       },
     });
   } catch (error) {
@@ -536,8 +641,70 @@ export async function handleSupportCallback(cq) {
   }
 }
 
+async function handleGroupSupportMessage(message) {
+  if (!isGroupMessage(message) || !message.from || message.from.is_bot) return false;
+  if (Number(message.chat.id) === SUPPORT_GROUP_ID || !isSupportTrigger(message)) return false;
+
+  try {
+    const existing = await getConversation(message.from.id);
+    if (existing?.isBanned) {
+      try { await sendBanNotice(message.from.id); } catch (_) {}
+      return true;
+    }
+
+    const convo = await ensureConversation(message.from);
+    if (!convo?.threadId) throw new Error('Support topic is unavailable.');
+    const forwarded = await api.forwardMessage({
+      chat_id: SUPPORT_GROUP_ID,
+      message_thread_id: convo.threadId,
+      from_chat_id: message.chat.id,
+      message_id: message.message_id,
+    });
+    if (!forwarded?.message_id) throw new Error('Telegram did not return the forwarded message ID.');
+    await saveSupportMessageLink({
+      userId: message.from.id,
+      threadId: convo.threadId,
+      supportMessageId: forwarded.message_id,
+      userMessageId: message.message_id,
+      sourceChatId: message.chat.id,
+      sourceThreadId: message.message_thread_id || null,
+    });
+
+    const name = escapeHtml(displayNameOf(message.from));
+    const prompt = await api.sendMessage({
+      chat_id: SUPPORT_GROUP_ID,
+      message_thread_id: convo.threadId,
+      text: `<b>User:</b> <a href="tg://user?id=${message.from.id}">${name}</a> — reply to this message to answer in the group.`,
+      parse_mode: 'HTML',
+      reply_parameters: { message_id: forwarded.message_id },
+    });
+    if (!prompt?.message_id) throw new Error('Telegram did not return the reply prompt ID.');
+
+    await saveSupportMessageLink({
+      userId: message.from.id,
+      threadId: convo.threadId,
+      supportMessageId: prompt.message_id,
+      userMessageId: message.message_id,
+      sourceChatId: message.chat.id,
+      sourceThreadId: message.message_thread_id || null,
+    });
+  } catch (error) {
+    console.error('Group support forwarding failed:', error?.description || error?.message || 'unknown error');
+    try {
+      await api.sendMessage({
+        chat_id: message.chat.id,
+        text: 'I could not forward that message to support. Please try again later.',
+        reply_parameters: { message_id: message.message_id },
+      });
+    } catch (_) {}
+  }
+  return true;
+}
+
 export async function handleSupportMessage(message) {
-  if (message.chat?.type !== 'private' || !message.from || message.from.is_bot) return false;
+  if (!message.from || message.from.is_bot) return false;
+  if (isGroupMessage(message)) return handleGroupSupportMessage(message);
+  if (message.chat?.type !== 'private') return false;
 
   let convo;
   try {
@@ -595,18 +762,77 @@ export async function handleSupportMessage(message) {
   }
 
   try {
-    await db.run(
-      'INSERT OR IGNORE INTO support_message_links (user_id, thread_id, support_message_id, user_message_id, created_at) VALUES (:user, :thread, :support, :original, :created)',
-      {
-        ':user': message.from.id,
-        ':thread': convo.threadId,
-        ':support': copied.message_id,
-        ':original': message.message_id,
-        ':created': nowSec(),
-      },
-    );
+    await saveSupportMessageLink({
+      userId: message.from.id,
+      threadId: convo.threadId,
+      supportMessageId: copied.message_id,
+      userMessageId: message.message_id,
+    });
   } catch (error) {
     console.error('Support reply mapping save failed:', error?.description || error?.message || 'unknown error');
+  }
+  return true;
+}
+
+async function handleLinkDirectedReply(message, convo, rawUrl) {
+  try {
+    const target = await resolveTelegramMessageLink(rawUrl);
+    const replyParameters = { message_id: target.messageId };
+    let result;
+
+    if (message.text !== undefined) {
+      const text = removeTelegramMessageLinks(message.text);
+      if (!text) throw new Error('Add reply text along with the group message link.');
+      result = await api.sendMessage({
+        chat_id: target.chatId,
+        ...(target.threadId ? { message_thread_id: target.threadId } : {}),
+        text,
+        reply_parameters: replyParameters,
+      });
+    } else if (message.caption !== undefined) {
+      const caption = removeTelegramMessageLinks(message.caption);
+      result = await api.copyMessage({
+        chat_id: target.chatId,
+        ...(target.threadId ? { message_thread_id: target.threadId } : {}),
+        from_chat_id: message.chat.id,
+        message_id: message.message_id,
+        caption,
+        caption_entities: [],
+        reply_parameters: replyParameters,
+      });
+    } else {
+      result = await api.copyMessage({
+        chat_id: target.chatId,
+        ...(target.threadId ? { message_thread_id: target.threadId } : {}),
+        from_chat_id: message.chat.id,
+        message_id: message.message_id,
+        reply_parameters: replyParameters,
+      });
+    }
+
+    if (!result?.message_id) throw new Error('Telegram did not return the delivered message ID.');
+    await saveSupportMessageLink({
+      userId: convo.userId,
+      threadId: convo.threadId,
+      supportMessageId: message.message_id,
+      userMessageId: result.message_id,
+      sourceChatId: target.chatId,
+      sourceThreadId: target.threadId,
+    });
+    await api.sendMessage({
+      chat_id: SUPPORT_GROUP_ID,
+      message_thread_id: convo.threadId,
+      text: '✅ Delivered as a reply to the linked group message.',
+    });
+  } catch (error) {
+    console.error('Link-directed group reply failed:', error?.description || error?.message || 'unknown error');
+    try {
+      await api.sendMessage({
+        chat_id: SUPPORT_GROUP_ID,
+        message_thread_id: convo.threadId,
+        text: `⚠️ Could not deliver that group reply: ${error?.description || error?.message || 'check the message link and bot permissions.'}`,
+      });
+    } catch (_) {}
   }
   return true;
 }
@@ -633,36 +859,45 @@ export async function handleSupportAdminReply(message) {
       });
       return true;
     }
+    const targetLinks = telegramMessageLinks(message);
+    if (targetLinks.length > 1) {
+      await api.sendMessage({
+        chat_id: SUPPORT_GROUP_ID,
+        message_thread_id: convo.threadId,
+        text: '⚠️ Include exactly one Telegram group message link in a reply.',
+      });
+      return true;
+    }
+    if (targetLinks.length === 1) return handleLinkDirectedReply(message, convo, targetLinks[0]);
+
     if (convo.isBanned || convo.status !== 'active') return true;
 
-    let replyToMessageId;
+    let replyLink;
     const repliedToId = message.reply_to_message?.message_id;
     if (repliedToId) {
-      const link = await db.select().from(supportMessageLinks)
+      replyLink = await db.select().from(supportMessageLinks)
         .where(and(
           eq(supportMessageLinks.threadId, message.message_thread_id),
           eq(supportMessageLinks.supportMessageId, repliedToId),
         )).get();
-      if (link) replyToMessageId = link.userMessageId;
     }
 
     const result = await api.copyMessage({
-      chat_id: convo.userId,
+      chat_id: replyLink?.sourceChatId ?? convo.userId,
+      ...(replyLink?.sourceThreadId ? { message_thread_id: replyLink.sourceThreadId } : {}),
       from_chat_id: message.chat.id,
       message_id: message.message_id,
-      ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
+      ...(replyLink?.userMessageId ? { reply_parameters: { message_id: replyLink.userMessageId } } : {}),
     });
     if (result?.message_id) {
-      await db.run(
-        'INSERT OR IGNORE INTO support_message_links (user_id, thread_id, support_message_id, user_message_id, created_at) VALUES (:user, :thread, :support, :original, :created)',
-        {
-          ':user': convo.userId,
-          ':thread': convo.threadId,
-          ':support': message.message_id,
-          ':original': result.message_id,
-          ':created': nowSec(),
-        },
-      );
+      await saveSupportMessageLink({
+        userId: convo.userId,
+        threadId: convo.threadId,
+        supportMessageId: message.message_id,
+        userMessageId: result.message_id,
+        sourceChatId: replyLink?.sourceChatId ?? null,
+        sourceThreadId: replyLink?.sourceThreadId ?? null,
+      });
     }
   } catch (error) {
     console.error('Support admin reply failed:', error?.description || error?.message || 'unknown error');
