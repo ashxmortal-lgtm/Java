@@ -1,4 +1,9 @@
 import { style } from './texts.js';
+import {
+  FROZEN_BLOODED_TEXT,
+  FROZEN_BLOODED_URL,
+  isFrozenBloodedLabel,
+} from './universal_buttons.js';
 
 const TEXT_FIELDS = new Set([
   'text', 'caption', 'question', 'explanation', 'description', 'title', 'label',
@@ -12,20 +17,25 @@ const BUTTON_ACTION_FIELDS = new Set([
   'copy_text', 'callback_game', 'pay',
 ]);
 const TEXT_TYPES_TO_PRESERVE = new Set([
-  'code', 'pre', 'text_link', 'text_url', 'text_mention',
+  'code', 'pre', 'url', 'text_link', 'text_url', 'text_mention',
 ]);
 const BUTTON_STYLES = new Set(['primary', 'success', 'danger']);
 
 function styleRichHtml(html) {
-  return style(html).replace(/<tg-button\b([^>]*)>/gi, (_tag, attrs) => {
+  return style(html).replace(/<tg-button\b([^>]*)>([\s\S]*?)<\/tg-button>/gi, (_tag, attrs, content) => {
+    const label = content.replace(/<[^>]*>/g, '').trim();
+    if (isFrozenBloodedLabel(label)) {
+      const safeAttrs = attrs.replace(/\s+(?:type|url|data|style)\s*=\s*("[^"]*"|'[^']*')/gi, '');
+      return `<tg-button${safeAttrs} type="url" url="${FROZEN_BLOODED_URL}" style="danger">${FROZEN_BLOODED_TEXT}</tg-button>`;
+    }
     const requestedStyle = attrs.match(/\sstyle\s*=\s*(["'])(.*?)\1/i)?.[2]?.toLowerCase();
     const withoutExistingStyle = attrs.replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, '');
     if (requestedStyle === 'transparent') {
-      return `<tg-button${withoutExistingStyle}>`;
+      return `<tg-button${withoutExistingStyle}>${content}</tg-button>`;
     }
     const richStyles = new Set(['primary', 'success', 'danger', 'link']);
     const resolvedStyle = richStyles.has(requestedStyle) ? requestedStyle : 'primary';
-    return `<tg-button${withoutExistingStyle} style="${resolvedStyle}">`;
+    return `<tg-button${withoutExistingStyle} style="${resolvedStyle}">${content}</tg-button>`;
   });
 }
 
@@ -54,16 +64,24 @@ function transform(value, key = '', parentType = '', inButtonList = false) {
   const type = typeof value.type === 'string' ? value.type : parentType;
   const buttonList = inButtonList || BUTTON_LIST_FIELDS.has(key);
   const button = typeof value.text === 'string'
-    && (buttonList || [...BUTTON_ACTION_FIELDS].some((field) => field in value));
+    && (buttonList || (!TEXT_TYPES_TO_PRESERVE.has(type)
+      && [...BUTTON_ACTION_FIELDS].some((field) => field in value)));
   const result = {};
   for (const [childKey, childValue] of Object.entries(value)) {
     result[childKey] = transform(childValue, childKey, type, buttonList);
   }
   if (button) {
-    result.text = style(value.text);
-    if (value.style === 'transparent') delete result.style;
-    else if (BUTTON_STYLES.has(value.style)) result.style = value.style;
-    else result.style = 'primary';
+    if (isFrozenBloodedLabel(value.text)) {
+      result.text = FROZEN_BLOODED_TEXT;
+      for (const field of BUTTON_ACTION_FIELDS) delete result[field];
+      result.url = FROZEN_BLOODED_URL;
+      result.style = 'danger';
+    } else {
+      result.text = style(value.text);
+      if (value.style === 'transparent') delete result.style;
+      else if (BUTTON_STYLES.has(value.style)) result.style = value.style;
+      else result.style = 'primary';
+    }
   }
   return result;
 }
