@@ -147,17 +147,12 @@ function isSupportTrigger(message) {
 }
 
 function parseTelegramMessageLink(rawUrl) {
-  const cleaned = String(rawUrl || '').trim().replace(/[),.!?;:]+$/g, '');
-  if (!cleaned) return null;
-  let url;
-  try {
-    url = new URL(/^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`);
-  } catch (_) {
-    return null;
-  }
-  const host = url.hostname.toLowerCase().replace(/^www\./, '');
-  if (host !== 't.me' && host !== 'telegram.me') return null;
-  const parts = url.pathname.split('/').filter(Boolean);
+  const cleaned = String(rawUrl || '').trim()
+    .replace(/[),.!?;:]+$/g, '')
+    .replace(/^<|>$/g, '');
+  const match = cleaned.match(/^(?:https?:\/\/)?(?:www\.)?(?:t\.me|telegram\.me)\/([^?#]+)(?:\?([^#]*))?(?:#.*)?$/i);
+  if (!match) return null;
+  const parts = match[1].split('/').filter(Boolean);
   let username;
   let tail;
   let chatId;
@@ -174,7 +169,8 @@ function parseTelegramMessageLink(rawUrl) {
     if (!/^[A-Za-z0-9_]{5,32}$/.test(username || '') || (tail.length !== 1 && tail.length !== 2)) return null;
   }
   if (!tail.every((part) => /^\d+$/.test(part))) return null;
-  const queryThreadId = url.searchParams.get('thread');
+  const queryThread = String(match[2] || '').match(/(?:^|&)thread=(\d+)(?:&|$)/i);
+  const queryThreadId = queryThread?.[1] || null;
   const messageId = Number(tail[tail.length - 1]);
   const threadId = tail.length === 2 ? Number(tail[0]) : queryThreadId && /^\d+$/.test(queryThreadId) ? Number(queryThreadId) : null;
   if (!Number.isSafeInteger(messageId) || messageId <= 0) return null;
@@ -184,13 +180,24 @@ function parseTelegramMessageLink(rawUrl) {
 }
 
 function telegramMessageLinks(message) {
-  const body = String(message.text || message.caption || '');
-  const matcher = new RegExp(TELEGRAM_MESSAGE_LINK_RE.source, 'gi');
-  const visible = [...body.matchAll(matcher)].map((match) => match[0]);
-  const entities = [...(message.entities || []), ...(message.caption_entities || [])]
-    .filter((entity) => entity.type === 'text_link' && entity.url)
-    .map((entity) => entity.url);
-  return [...new Set([...visible, ...entities].filter((url) => parseTelegramMessageLink(url)))];
+  const text = String(message.text || '');
+  const caption = String(message.caption || '');
+  const extractVisible = (body) => [...body.matchAll(new RegExp(TELEGRAM_MESSAGE_LINK_RE.source, 'gi'))]
+    .map((match) => match[0]);
+  const extractEntities = (entities, body) => (entities || []).flatMap((entity) => {
+    if (entity.type === 'text_link' && entity.url) return [entity.url];
+    if (entity.type === 'url' && Number.isInteger(entity.offset) && Number.isInteger(entity.length) && entity.length > 0) {
+      return [body.slice(entity.offset, entity.offset + entity.length)];
+    }
+    return [];
+  });
+  const candidates = [
+    ...extractVisible(text),
+    ...extractVisible(caption),
+    ...extractEntities(message.entities, text),
+    ...extractEntities(message.caption_entities, caption),
+  ];
+  return [...new Set(candidates.filter((url) => parseTelegramMessageLink(url)))];
 }
 
 function removeTelegramMessageLinks(text) {
@@ -857,7 +864,14 @@ async function handleLinkDirectedReply(message, context, rawUrl) {
 
     if (message.text !== undefined) {
       const text = removeTelegramMessageLinks(message.text);
-      if (!text) throw new Error('Add reply text along with the group message link.');
+      if (!text) {
+        await api.sendMessage({
+          chat_id: SUPPORT_GROUP_ID,
+          message_thread_id: context.threadId,
+          text: 'Add your reply text before or after the Telegram message link.',
+        });
+        return true;
+      }
       result = await api.sendMessage({
         chat_id: target.chatId,
         ...(target.threadId ? { message_thread_id: target.threadId } : {}),
