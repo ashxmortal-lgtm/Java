@@ -11,11 +11,6 @@ import { BotApiError } from 'sdk';
 import { api } from '../message_api.js';
 import { escapeHtml, style, mention } from '../texts.js';
 
-/** Plain text for a button label (no HTML). */
-function btnLabel(text) {
-  return String(text).replace(/</g, '').replace(/>/g, '');
-}
-
 /**
  * One callback button inside a rich message.
  * @param {string} text visible label
@@ -24,7 +19,16 @@ function btnLabel(text) {
  */
 export function richBtn(text, data, btnStyle = null) {
   const styleAttr = btnStyle ? ` style="${btnStyle}"` : '';
-  return `<tg-button type="callback_data"${styleAttr} data="${escapeHtml(data)}">${btnLabel(text)}</tg-button>`;
+  return `<tg-button type="callback_data"${styleAttr} data="${escapeHtml(data)}">${escapeHtml(text)}</tg-button>`;
+}
+
+function richButton(button) {
+  if (button?.callback_data != null) return richBtn(button.text, button.callback_data, button.style || null);
+  if (button?.url) {
+    const styleAttr = button.style ? ` style="${button.style}"` : '';
+    return `<tg-button type="url"${styleAttr} url="${escapeHtml(button.url)}">${escapeHtml(button.text)}</tg-button>`;
+  }
+  return '';
 }
 
 /** One row of rich buttons (1–8). align: left|center|right */
@@ -40,7 +44,8 @@ export function keyboardToRichRows(keyboard) {
   const rows = keyboard?.inline_keyboard || [];
   return rows
     .map((row) => {
-      const btns = row.map((b) => richBtn(b.text, b.callback_data));
+      const btns = row.map(richButton).filter(Boolean);
+      if (!btns.length) return '';
       return richRow(btns);
     })
     .join('');
@@ -54,7 +59,8 @@ export function richHtml(bodyHtml, keyboard) {
 }
 
 /**
- * Send a rich map message. Falls back to classic sendMessage + reply_markup.
+ * Send a rich map message. If Rich Messages are unavailable, send text only;
+ * map actions must never silently downgrade to ordinary inline buttons.
  * Returns the sent message object (or null).
  */
 export async function sendMapRich(chatId, bodyHtml, keyboard, extra = {}) {
@@ -68,7 +74,7 @@ export async function sendMapRich(chatId, bodyHtml, keyboard, extra = {}) {
   } catch (e) {
     if (!(e instanceof BotApiError)) throw e;
     console.error('[map rich send fallback]', e);
-    // Classic fallback: strip button tags from body for text, keep reply_markup
+    // Keep the text readable, but do not downgrade rich controls to a classic keyboard.
     const plain = bodyHtml
       .replace(/<tg-button-row[\s\S]*?<\/tg-button-row>/gi, '')
       .replace(/<tg-button[\s\S]*?<\/tg-button>/gi, '');
@@ -76,7 +82,6 @@ export async function sendMapRich(chatId, bodyHtml, keyboard, extra = {}) {
       chat_id: chatId,
       text: plain || '🗺️ Map',
       parse_mode: 'HTML',
-      reply_markup: keyboard || undefined,
       ...extra,
     });
   }
@@ -84,7 +89,8 @@ export async function sendMapRich(chatId, bodyHtml, keyboard, extra = {}) {
 
 /**
  * Edit an existing message to rich content (+ embedded buttons).
- * Falls back to classic editMessageText / editMessageCaption.
+ * If editing rich content fails, keep the fallback text-only rather than
+ * attaching a conventional keyboard.
  */
 export async function editMapRich(chatId, messageId, bodyHtml, keyboard) {
   const html = richHtml(bodyHtml, keyboard);
@@ -98,7 +104,7 @@ export async function editMapRich(chatId, messageId, bodyHtml, keyboard) {
   } catch (e) {
     if (!(e instanceof BotApiError)) console.error('[map rich edit]', e);
   }
-  // Classic text edit
+  // Text-only fallback for clients/platforms that reject rich edits.
   const plain = bodyHtml
     .replace(/<tg-button-row[\s\S]*?<\/tg-button-row>/gi, '')
     .replace(/<tg-button[\s\S]*?<\/tg-button>/gi, '');
@@ -108,7 +114,6 @@ export async function editMapRich(chatId, messageId, bodyHtml, keyboard) {
       message_id: messageId,
       text: plain,
       parse_mode: 'HTML',
-      reply_markup: keyboard ? JSON.stringify(keyboard) : undefined,
     });
     return true;
   } catch (_) {}
@@ -118,7 +123,6 @@ export async function editMapRich(chatId, messageId, bodyHtml, keyboard) {
       message_id: messageId,
       caption: plain,
       parse_mode: 'HTML',
-      reply_markup: keyboard ? JSON.stringify(keyboard) : undefined,
     });
     return true;
   } catch (e2) {

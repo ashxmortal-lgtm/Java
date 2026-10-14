@@ -34,11 +34,12 @@ async function botUsername() {
   }
 }
 
-async function primaryButtons() {
+async function primaryButtons(userId) {
   const uname = await botUsername();
   return row(
     urlBtn('➕ Add to Group', `https://t.me/${uname}?startgroup=true&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members`, 'success'),
     cb('📚 Help', 'wel:help', 'primary'),
+    cb('💬 Contact Owner', `si:menu:${userId}`, 'primary'),
   );
 }
 
@@ -63,7 +64,7 @@ function userHelpLines() {
 }
 
 export async function buildWelcomeBlocks(user) {
-  const buttons = await primaryButtons();
+  const buttons = await primaryButtons(user.id);
   const uname = await botUsername();
 
   if (user.id === OWNER_ID) {
@@ -137,7 +138,7 @@ export async function sendWelcome(chatId, user) {
         para('◈ /Balance — check balance'),
         para('◈ /Profile — view profile'),
         para('◈ /Inventory — view inventory'),
-        await primaryButtons(),
+        await primaryButtons(user.id),
       ];
       return await api.sendRichMessage({ chat_id: chatId, rich_message: rich(simple) });
     } catch (e2) {
@@ -152,12 +153,6 @@ export async function sendWelcome(chatId, user) {
           '◈ /Balance — check balance\n' +
           '◈ /Profile — view profile\n' +
           '◈ /Inventory — view inventory',
-        reply_markup: {
-          inline_keyboard: [[
-            { text: '➕ Add to Group', url: `https://t.me/${uname}?startgroup=true&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members` },
-            { text: '📚 Help', callback_data: 'wel:help' },
-          ]],
-        },
       });
     }
   }
@@ -207,12 +202,13 @@ export async function buildWelcome(user) {
   return { blocks: await buildWelcomeBlocks(user), rich: true };
 }
 export function buildUserHelp() { return 'Use /help'; }
-export async function primaryKeyboard() {
+export async function primaryKeyboard(userId) {
   const uname = await botUsername();
   return {
     inline_keyboard: [[
       { text: '➕ Add to Group', url: `https://t.me/${uname}?startgroup=true&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members&admin=delete_messages+restrict_members+invite_users+pin_messages+manage_video_chats+change_info+manage_topics+promote_members` },
       { text: '📚 Help', callback_data: 'wel:help' },
+      ...(userId ? [{ text: '💬 Contact Owner', callback_data: `si:menu:${userId}` }] : []),
     ]],
   };
 }

@@ -1,6 +1,6 @@
 /**
  * Map command + callback router.
- * Photo captions + centered keyboards; rich fallback when media fails.
+ * Map artwork remains a photo; all controls are Telegram Rich Message buttons.
  */
 
 import { BotApiError } from 'sdk';
@@ -143,46 +143,43 @@ function kbFor(locKey, userId) {
   return (map[locKey] || mapKeyboard)(userId);
 }
 
-/** Caption HTML for photo messages (no embedded tg-buttons — those use reply_markup). */
-function captionFromBody(user, bodyInner) {
-  const name = escapeHtml((user && user.first_name) || 'Shinobi');
-  const inner = String(bodyInner || '')
-    .replace(/<\/?p>/gi, '\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-  return style(`<b>${name}</b>\n\n${inner}`);
-}
-
 /**
- * Show map screen: prefer storage-channel photo + caption + keyboard.
- * locKey null/'home' → main map image.
+ * Keep the map artwork as a photo, but render all controls in a rich-message
+ * panel replied to that photo. The callback message carries the photo reply ID.
  */
-async function showScreen(chatId, messageId, user, bodyInner, keyboard, locKey = 'home') {
+async function showScreen(chatId, panelMessageId, user, bodyInner, keyboard, locKey = 'home') {
   const body = mapBody(user, bodyInner);
   const storageId = storageIdForLocation(locKey);
-  const caption = captionFromBody(user, bodyInner);
+  const caption = style('<b>🗺️ KONOHA MAP</b>');
+  const previousPhotoId = Number(user?._mapPhotoMessageId) || null;
+  let photoId = previousPhotoId;
 
   try {
     const result = await showMapPhoto({
       chatId,
-      messageId,
+      messageId: previousPhotoId,
       storageMessageId: storageId,
       caption,
-      replyMarkup: keyboard,
+      replyMarkup: { inline_keyboard: [] },
     });
-    if (result && result.ok) return result.messageId || messageId;
+    if (result?.ok) photoId = result.messageId || previousPhotoId;
   } catch (e) {
     console.error('[map showScreen photo]', e);
   }
 
-  // Rich / classic text fallback
-  if (messageId) {
-    await editMapRich(chatId, messageId, body, keyboard);
-    return messageId;
+  // A rich panel is edited in place when its photo could also be edited in place.
+  if (panelMessageId && user?._mapHasRichPanel && previousPhotoId && photoId === previousPhotoId) {
+    await editMapRich(chatId, panelMessageId, body, keyboard);
+    return panelMessageId;
   }
-  const sent = await sendMapRich(chatId, body, keyboard);
-  return sent?.message_id || sent?.result?.message_id || null;
+
+  const sent = await sendMapRich(chatId, body, keyboard, photoId
+    ? { reply_parameters: { message_id: photoId, allow_sending_without_reply: true } }
+    : {});
+  if (panelMessageId && user?._mapHasRichPanel) {
+    try { await api.deleteMessage({ chat_id: chatId, message_id: panelMessageId }); } catch (_) {}
+  }
+  return sent?.message_id || sent?.result?.message_id || panelMessageId || null;
 }
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -439,7 +436,11 @@ export async function handleMapCallback(cb) {
     return true;
   }
 
-  const user = cb.from;
+  const user = {
+    ...cb.from,
+    _mapHasRichPanel: !!msg.reply_to_message,
+    _mapPhotoMessageId: msg.reply_to_message?.message_id || msg.message_id,
+  };
   const chatId = msg.chat.id;
   const messageId = msg.message_id;
 
@@ -487,13 +488,7 @@ export async function handleMapCallback(cb) {
           storeContent(screen, user.id, { fromMap: true }),
           async () => {
             const { screenText, screenKeyboard } = await import('../store.js');
-            await api.editMessageText({
-              chat_id: chatId,
-              message_id: messageId,
-              text: style(screenText(screen)),
-              parse_mode: 'HTML',
-              reply_markup: screenKeyboard(screen, user.id, { fromMap: true }),
-            });
+            await editMapRich(chatId, messageId, style(screenText(screen)), screenKeyboard(screen, user.id, { fromMap: true }));
           },
         );
       } catch (e) {
@@ -512,13 +507,7 @@ export async function handleMapCallback(cb) {
           storeContent('main', user.id, { fromMap: true }),
           async () => {
             const { screenText, screenKeyboard } = await import('../store.js');
-            await api.editMessageText({
-              chat_id: chatId,
-              message_id: messageId,
-              text: style(screenText('main')),
-              parse_mode: 'HTML',
-              reply_markup: screenKeyboard('main', user.id, { fromMap: true }),
-            });
+            await editMapRich(chatId, messageId, style(screenText('main')), screenKeyboard('main', user.id, { fromMap: true }));
           },
         );
       } catch (e) {
@@ -530,12 +519,7 @@ export async function handleMapCallback(cb) {
             storeContent('main', user.id, { fromMap: true }),
             async () => {
               const { screenText, screenKeyboard } = await import('../store.js');
-              await api.sendMessage({
-                chat_id: chatId,
-                text: style(screenText('main')),
-                parse_mode: 'HTML',
-                reply_markup: screenKeyboard('main', user.id, { fromMap: true }),
-              });
+              await sendMapRich(chatId, style(screenText('main')), screenKeyboard('main', user.id, { fromMap: true }));
             },
           );
         } catch (e2) {
@@ -985,13 +969,7 @@ export async function handleMapCallback(cb) {
           user,
           abilityContent(user.id, { fromMap: true }),
           async () => {
-            await api.editMessageText({
-              chat_id: chatId,
-              message_id: messageId,
-              text: style(abilityText()),
-              parse_mode: 'HTML',
-              reply_markup: abilityKeyboardFromMap(user.id),
-            });
+            await editMapRich(chatId, messageId, style(abilityText()), abilityKeyboardFromMap(user.id));
           },
         );
       } catch (e) {
@@ -1002,12 +980,7 @@ export async function handleMapCallback(cb) {
             user,
             abilityContent(user.id, { fromMap: true }),
             async () => {
-              await api.sendMessage({
-                chat_id: chatId,
-                text: style(abilityText()),
-                parse_mode: 'HTML',
-                reply_markup: abilityKeyboardFromMap(user.id),
-              });
+              await sendMapRich(chatId, style(abilityText()), abilityKeyboardFromMap(user.id));
             },
           );
         } catch (_) {}

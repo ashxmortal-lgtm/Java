@@ -448,6 +448,10 @@ export const supportConversations = table('support_conversations', {
   displayName: text('display_name').notNull().default('User'),
   username: text('username'),
   lastConfirmationMessageId: integer('last_confirmation_message_id'),
+  isBanned: integer('is_banned').notNull().default(0),
+  introMessageId: integer('intro_message_id'),
+  unbanPromptAt: integer('unban_prompt_at').notNull().default(0),
+  unbanRequestAt: integer('unban_request_at').notNull().default(0),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, (t) => ({
