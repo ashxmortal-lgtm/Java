@@ -23,7 +23,9 @@ function styleRichHtml(html) {
     if (requestedStyle === 'transparent') {
       return `<tg-button${withoutExistingStyle}>`;
     }
-    return `<tg-button${withoutExistingStyle} style="primary">`;
+    const richStyles = new Set(['primary', 'success', 'danger', 'link']);
+    const resolvedStyle = richStyles.has(requestedStyle) ? requestedStyle : 'primary';
+    return `<tg-button${withoutExistingStyle} style="${resolvedStyle}">`;
   });
 }
 
