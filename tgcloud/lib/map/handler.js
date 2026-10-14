@@ -174,7 +174,7 @@ async function showScreen(chatId, panelMessageId, user, bodyInner, keyboard, loc
   }
 
   const sent = await sendMapRich(chatId, body, keyboard, photoId
-    ? { reply_parameters: { message_id: photoId, allow_sending_without_reply: true } }
+    ? { reply_to_message_id: photoId }
     : {});
   if (panelMessageId && user?._mapHasRichPanel) {
     try { await api.deleteMessage({ chat_id: chatId, message_id: panelMessageId }); } catch (_) {}
