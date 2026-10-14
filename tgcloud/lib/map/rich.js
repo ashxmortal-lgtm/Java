@@ -107,7 +107,7 @@ export async function sendMapRich(chatId, bodyHtml, keyboard, options = {}) {
       chat_id: chatId,
       text: plain || '🗺️ Map',
       parse_mode: 'HTML',
-      ...extra,
+      ...apiOptions,
     });
   }
 }
