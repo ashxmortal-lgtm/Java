@@ -17,7 +17,17 @@ const EMO = {
   'Starter Shinobi': '🥷',
 };
 
-export async function profileText(user) {
+const RANKS = [
+  [0, 'Academy Student'],
+  [500, 'Genin'],
+  [1500, 'Chūnin'],
+  [3500, 'Jōnin'],
+  [6500, 'Anbu'],
+  [10000, 'Kage'],
+];
+
+/** Return only the caller's profile fields, shared by /profile and the Mini App. */
+export async function profileData(user) {
   const id = user.id;
   const u = await db.get(sql`
     SELECT balance, xp, kills, claim_streak, last_claim_date, naruto_patrols
@@ -48,22 +58,6 @@ export async function profileText(user) {
     ORDER BY item_name
   `);
 
-  const roster = shinobi.length
-    ? shinobi.map((s) => `${EMO[s.item_name] || '🥷'} ${s.item_name}`).join('\n')
-    : '— none yet —';
-  const jutsuLine = jutsu.length
-    ? jutsu.map((j) => `🧠 ${j.item_name}`).join('\n')
-    : '— none —';
-
-  // Next rank threshold
-  const RANKS = [
-    [0, 'Academy Student'],
-    [500, 'Genin'],
-    [1500, 'Chūnin'],
-    [3500, 'Jōnin'],
-    [6500, 'Anbu'],
-    [10000, 'Kage'],
-  ];
   let nextLabel = 'max rank';
   let nextXp = null;
   for (const [need, name] of RANKS) {
@@ -77,16 +71,46 @@ export async function profileText(user) {
     ? `${fmt(xp)} / ${fmt(nextXp)} XP → ${nextLabel}`
     : `${fmt(xp)} XP (Kage)`;
 
+  return {
+    displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Shinobi',
+    username: user.username || '',
+    rank: rank[1],
+    xp,
+    xpText: progress,
+    balance: bal,
+    chakra,
+    kills,
+    streak,
+    lastClaim,
+    narutoPatrols,
+    roster: shinobi.map((s) => ({
+      name: s.item_name,
+      emoji: EMO[s.item_name] || '🥷',
+      qty: s.qty,
+    })),
+    jutsu: jutsu.map((j) => j.item_name),
+  };
+}
+
+export async function profileText(user) {
+  const profile = await profileData(user);
+  const roster = profile.roster.length
+    ? profile.roster.map((s) => `${s.emoji} ${s.name}`).join('\n')
+    : '— none yet —';
+  const jutsuLine = profile.jutsu.length
+    ? profile.jutsu.map((name) => `🧠 ${name}`).join('\n')
+    : '— none —';
+
   return style(
     `👤 ${mention(user)}\n` +
     `─────────────────⟢\n` +
-    `🥷 Rank: <b>${rank[1]}</b>\n` +
-    `✨ XP: ${progress}\n` +
-    `🍥 Coins: ${fmt(bal)}\n` +
-    `⚡ Chakra: ${fmt(chakra)}\n` +
-    `🔪 Kills: ${fmt(kills)}\n` +
-    `🔥 Claim streak: ${fmt(streak)} (last: ${lastClaim})\n` +
-    (narutoPatrols ? `🍥 Naruto patrols: ${fmt(narutoPatrols)}\n` : '') +
+    `🥷 Rank: <b>${profile.rank}</b>\n` +
+    `✨ XP: ${profile.xpText}\n` +
+    `🍥 Coins: ${fmt(profile.balance)}\n` +
+    `⚡ Chakra: ${fmt(profile.chakra)}\n` +
+    `🔪 Kills: ${fmt(profile.kills)}\n` +
+    `🔥 Claim streak: ${fmt(profile.streak)} (last: ${profile.lastClaim})\n` +
+    (profile.narutoPatrols ? `🍥 Naruto patrols: ${fmt(profile.narutoPatrols)}\n` : '') +
     `─────────────────⟢\n` +
     `👥 Roster\n${roster}\n` +
     `─────────────────⟢\n` +
