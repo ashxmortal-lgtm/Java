@@ -1,43 +1,275 @@
 <!doctype html>
-<html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07111f"><title>Frozen Blooded</title>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-<style>
-:root{color-scheme:dark;--bg:#07111f;--panel:#0d1b2d;--ice:#8de7ff;--text:#edf8ff;--muted:#9bb1c5;--line:rgba(141,231,255,.16)}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 80% 0%,rgba(49,153,205,.16),transparent 38%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}.shell{width:min(100%,560px);margin:auto;padding:18px 16px 32px}button{font:inherit;color:inherit;cursor:pointer}.top{display:flex;align-items:center;gap:11px;margin:5px 0 28px}.mark{width:43px;height:43px;border:1px solid var(--line);border-radius:14px;display:grid;place-items:center;background:#10243a;font-size:22px}.brand{font-size:12px;letter-spacing:.18em;color:var(--ice);font-weight:850}.sub{font-size:11px;color:var(--muted);letter-spacing:normal;font-weight:400}.hero{border:1px solid var(--line);border-radius:25px;padding:25px 20px;background:linear-gradient(145deg,#143049,#091626)}.eyebrow{color:var(--ice);font-size:10px;font-weight:800;letter-spacing:.2em;text-transform:uppercase}h1{font-size:clamp(30px,8vw,40px);line-height:1.06;letter-spacing:-.04em;margin:12px 0}.ice{color:var(--ice)}.intro{font-size:13px;color:#b6c9d9;margin:0 0 21px}.home-actions{display:grid;gap:12px}.mode{width:100%;display:flex;align-items:center;gap:14px;text-align:left;padding:19px 16px;border:1px solid var(--line);border-radius:19px;background:linear-gradient(145deg,#11273d,#0a192a)}.mode-icon{width:47px;height:47px;border-radius:15px;display:grid;place-items:center;background:rgba(141,231,255,.09);font-size:23px;flex-shrink:0}.mode strong{display:block;font-size:14px;letter-spacing:.05em}.mode small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.arrow{margin-left:auto;color:var(--ice);font-size:21px}.view{display:none}.view.active{display:block}.back{border:0;background:transparent;color:var(--ice);padding:8px 0;margin:0 0 12px}.page-title{font-size:28px;margin:4px 0 6px}.page-desc{color:var(--muted);font-size:12px;margin:0 0 18px}.section{margin:22px 0 10px;font-size:12px;letter-spacing:.13em;color:var(--ice);font-weight:800;text-transform:uppercase}.list{display:grid;gap:9px}.item{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:13px;border:1px solid var(--line);border-radius:15px;background:var(--panel)}.item-icon{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;background:rgba(141,231,255,.08);font-size:18px;flex-shrink:0}.item-body{flex:1;min-width:0}.item strong{display:block;font-size:12px}.item small{display:block;color:var(--muted);font-size:10px;margin-top:2px}.tag{font-size:9px;color:var(--ice);border:1px solid var(--line);border-radius:99px;padding:3px 6px}.notice{padding:12px 13px;border:1px dashed rgba(141,231,255,.25);border-radius:14px;color:var(--muted);font-size:11px;margin-top:15px}.profile-card{padding:18px;border:1px solid var(--line);border-radius:20px;background:var(--panel)}.profile-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}.avatar{width:52px;height:52px;border-radius:17px;display:grid;place-items:center;background:linear-gradient(145deg,#b5f2ff,#4bbde8);color:#07111f;font-size:23px;font-weight:900}.profile-name{font-weight:800}.profile-handle{color:var(--muted);font-size:11px}.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.stat{padding:12px;border-radius:13px;background:#10243a}.stat small{display:block;color:var(--muted);font-size:10px}.stat strong{display:block;font-size:14px;margin-top:3px;overflow-wrap:anywhere}.subheading{font-size:11px;color:var(--ice);font-weight:800;letter-spacing:.08em;margin:16px 0 7px}.plain{font-size:12px;color:#d9e9f5;white-space:pre-line}.primary{border:0;border-radius:12px;padding:11px 14px;background:linear-gradient(100deg,#9cecff,#4dbfe8);color:#061321;font-weight:800}.footer{text-align:center;color:#607a91;font-size:10px;margin-top:28px}
-</style></head><body><main class="shell">
-<header class="top"><div class="mark">❄</div><div><div class="brand">FROZEN BLOODED</div><div class="sub">Study • Shinobi • Community</div></div></header>
-<section class="view active" id="home-view"><div class="hero"><div class="eyebrow">Your world, one hub</div><h1>Stay sharp.<br><span class="ice">Stay frozen.</span></h1><p class="intro" id="welcome">Choose your path.</p><div class="home-actions"><button class="mode" data-go="game"><span class="mode-icon">⚔️</span><span><strong>GAME MODE</strong><small>Shinobi economy, games and profile</small></span><span class="arrow">›</span></button><button class="mode" data-go="study"><span class="mode-icon">📚</span><span><strong>STUDY MODE</strong><small>HNC resources, study tools and groups</small></span><span class="arrow">›</span></button></div></div><div class="footer">FROZEN BLOODED · COMMUNITY HUB</div></section>
-<section class="view" id="game-view"><button class="back" data-go="home">← Home</button><div class="eyebrow">Shinobi system</div><h1 class="page-title">Game mode</h1><p class="page-desc">Shortcuts to existing Java bot features.</p><div class="section">Shinobi & economy</div><div class="list">
-<button class="item" data-command="/claim"><span class="item-icon">🍥</span><span class="item-body"><strong>Daily claim</strong><small>Daily coins and chakra · DM</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/balance"><span class="item-icon">🪙</span><span class="item-body"><strong>Balance</strong><small>Check Konoha Coins</small></span><span class="arrow">›</span></button>
-<button class="item" data-action="profile"><span class="item-icon">🥷</span><span class="item-body"><strong>My profile</strong><small>Live data from the Java bot</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/inventory"><span class="item-icon">🎒</span><span class="item-body"><strong>Inventory</strong><small>Your shinobi, jutsu and items</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/shinobi_store"><span class="item-icon">🏯</span><span class="item-body"><strong>Shinobi store</strong><small>Browse shinobi and jutsu</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/buy"><span class="item-icon">🛍️</span><span class="item-body"><strong>Buy</strong><small>Use /buy with an item name</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/ability"><span class="item-icon">✨</span><span class="item-body"><strong>Abilities</strong><small>View abilities and levels</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/gift_store"><span class="item-icon">🎁</span><span class="item-body"><strong>Gift store</strong><small>Browse available gifts</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/gift"><span class="item-icon">💌</span><span class="item-body"><strong>Gift someone</strong><small>Requires recipient and arguments in bot chat</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/map"><span class="item-icon">🗺️</span><span class="item-body"><strong>Konoha map</strong><small>Explore map locations</small></span><span class="arrow">›</span></button>
-<button class="item" data-command="/mission" data-group="true"><span class="item-icon">📜</span><span class="item-body"><strong>Mission</strong><small>Use in a group</small></span><span class="tag">GROUP</span></button>
-<button class="item" data-command="/patrol" data-group="true"><span class="item-icon">🌲</span><span class="item-body"><strong>Patrol</strong><small>Use in a group</small></span><span class="tag">GROUP</span></button></div>
-<div class="section">Shinobi games</div><div class="list"><button class="item" data-command="/games"><span class="item-icon">🎮</span><span class="item-body"><strong>Games menu</strong><small>Open available bot games</small></span><span class="arrow">›</span></button><button class="item" data-command="/xoxo" data-group="true"><span class="item-icon">⭕</span><span class="item-body"><strong>XOXO · Tic-Tac-Toe</strong><small>Start in a group where the bot is present</small></span><span class="tag">GROUP</span></button><button class="item" data-command="/rps" data-group="true"><span class="item-icon">✊</span><span class="item-body"><strong>Rock Paper Scissors</strong><small>Start in a group where the bot is present</small></span><span class="tag">GROUP</span></button></div><div class="notice">This Mini App adds no coin-stake controls. Group-only commands must be sent in a group where @exfrozen_bot is present.</div></section>
-<section class="view" id="study-view"><button class="back" data-go="home">← Home</button><div class="eyebrow">Focus mode</div><h1 class="page-title">Study portal</h1><p class="page-desc">Uses the same resources and community links already present in /hnc.</p>
-<div class="section">Study material</div><div class="list">
-<button class="item" data-url="https://t.me/+o_5e9GYDQDYwMzRl"><span class="item-icon">🔒</span><span class="item-body"><strong>Join this channel first</strong><small>Open the HNC study channel before the resources below</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/+Dkf7sqGgUWY0MTU1"><span class="item-icon">📚</span><span class="item-body"><strong>Study material</strong><small>Notes, PDFs and resources</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/c/4471291233/243"><span class="item-icon">📕</span><span class="item-body"><strong>PYQ books</strong><small>Previous-year question books</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/c/4471291233/152"><span class="item-icon">📘</span><span class="item-body"><strong>Modules</strong><small>Module collection</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/c/4471291233/368"><span class="item-icon">📚</span><span class="item-body"><strong>Other books</strong><small>Additional book resources</small></span><span class="arrow">↗</span></button></div>
-<div class="section">Short notes</div><div class="list"><button class="item" data-url="https://t.me/c/2994306672/735"><span class="item-icon">🧬</span><span class="item-body"><strong>Class 11 Biology</strong><small>Short notes</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/c/2994306672/752"><span class="item-icon">🧬</span><span class="item-body"><strong>Class 12 Biology</strong><small>Short notes</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/c/2994306672/778"><span class="item-icon">⚗️</span><span class="item-body"><strong>Chemistry</strong><small>Short notes</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/c/2994306672/823"><span class="item-icon">⚛️</span><span class="item-body"><strong>Class 11 Physics</strong><small>Short notes</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/c/2994306672/824"><span class="item-icon">⚛️</span><span class="item-body"><strong>Class 12 Physics</strong><small>Short notes</small></span><span class="arrow">↗</span></button></div>
-<div class="section">Groups & channels</div><div class="list"><button class="item" data-url="https://t.me/+ChxNR6ShlzRjMjA1"><span class="item-icon">💬</span><span class="item-body"><strong>Discussion group</strong><small>Ask, discuss and learn</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/+lxR4mMxK-1s4MGJl"><span class="item-icon">📖</span><span class="item-body"><strong>Hidden NEET Library</strong><small>Resource library</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/+hRDedaMqU2liNmM1"><span class="item-icon">✅</span><span class="item-body"><strong>To-do sharing group</strong><small>Planning and accountability</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://link.yeolpumta.com/P3R5cGU9Z3JvdXBJbnZpdGUmaWQ9NjE3OTA4Mw=="><span class="item-icon">⏱️</span><span class="item-body"><strong>YPT study group</strong><small>Study-time tracking</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/+mlp94tMHi29jMmFl"><span class="item-icon">🗣️</span><span class="item-body"><strong>Yapping group</strong><small>Community chat</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/The_Migrator_Quizzes"><span class="item-icon">❄️</span><span class="item-body"><strong>Hidden NEET Quizzes</strong><small>Quiz updates</small></span><span class="arrow">↗</span></button><button class="item" data-url="https://t.me/konoha_quizzes"><span class="item-icon">🧠</span><span class="item-body"><strong>Konoha's NEET MCQ</strong><small>Practice questions</small></span><span class="arrow">↗</span></button></div>
-<div class="section">Study tools</div><div class="list"><button class="item" data-command="/study"><span class="item-icon">📅</span><span class="item-body"><strong>Study dashboard</strong><small>/study</small></span><span class="arrow">›</span></button><button class="item" data-command="/tracker"><span class="item-icon">🧪</span><span class="item-body"><strong>Biology tracker</strong><small>/tracker</small></span><span class="arrow">›</span></button><button class="item" data-command="/studytime"><span class="item-icon">⏳</span><span class="item-body"><strong>Study time</strong><small>/studytime</small></span><span class="arrow">›</span></button><button class="item" data-command="/todo"><span class="item-icon">☑️</span><span class="item-body"><strong>To-do</strong><small>/todo</small></span><span class="arrow">›</span></button><button class="item" data-command="/duel"><span class="item-icon">🤝</span><span class="item-body"><strong>Study duel</strong><small>/duel</small></span><span class="arrow">›</span></button><button class="item" data-command="/report"><span class="item-icon">📝</span><span class="item-body"><strong>Study report</strong><small>/report</small></span><span class="arrow">›</span></button><button class="item" data-command="/hnc"><span class="item-icon">❄️</span><span class="item-body"><strong>Open HNC menu</strong><small>/hnc</small></span><span class="arrow">›</span></button></div></section>
-<section class="view" id="profile-view"><button class="back" data-go="game">← Game mode</button><div class="eyebrow">Java bot account</div><h1 class="page-title">Your profile</h1><p class="page-desc">Live profile data from the existing bot database.</p><div class="profile-card"><div class="profile-head"><div class="avatar" id="avatar">❄</div><div><div class="profile-name" id="profile-name">Loading profile…</div><div class="profile-handle" id="profile-handle">Connected through Telegram</div></div></div><div class="stats" id="stats"><div class="stat"><small>Status</small><strong>Loading…</strong></div></div><div class="subheading">SHINOBI ROSTER</div><div class="plain" id="roster">Loading…</div><div class="subheading">JUTSU</div><div class="plain" id="jutsu">Loading…</div><div class="notice" id="profile-status">Connecting to the Java bot endpoint…</div><button class="primary" id="refresh-profile" style="margin-top:12px">Refresh profile</button></div></section>
-</main>
-<script>
-const tg=window.Telegram&&window.Telegram.WebApp;if(tg){tg.ready();tg.expand();try{tg.setHeaderColor('#07111f');tg.setBackgroundColor('#07111f')}catch(_){}}
-const botUsername='exfrozen_bot';function notify(m){if(tg&&tg.showAlert)tg.showAlert(m);else alert(m)}
-function showView(n){const t=document.getElementById(n+'-view');if(!t)return;document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v===t));window.scrollTo({top:0,behavior:'smooth'});if(n==='profile')loadProfile()}
-document.querySelectorAll('[data-go]').forEach(e=>e.addEventListener('click',()=>showView(e.dataset.go)));
-document.querySelectorAll('[data-url]').forEach(e=>e.addEventListener('click',()=>{const u=e.dataset.url;if(tg&&/^https:\/\/t\.me\//i.test(u)&&tg.openTelegramLink)tg.openTelegramLink(u);else if(tg&&tg.openLink)tg.openLink(u);else window.open(u,'_blank','noopener,noreferrer')}));
-document.querySelectorAll('[data-action="profile"]').forEach(e=>e.addEventListener('click',()=>showView('profile')));
-document.querySelectorAll('[data-command]').forEach(e=>e.addEventListener('click',async()=>{const c=e.dataset.command;let copied=false;try{if(navigator.clipboard&&navigator.clipboard.writeText){await navigator.clipboard.writeText(c);copied=true}}catch(_){}if(e.dataset.group==='true'){notify((copied?'Copied '+c+'. ':'')+'Send '+c+' in a group where @'+botUsername+' is present.');return}if(tg&&tg.openTelegramLink)tg.openTelegramLink('https://t.me/'+botUsername);else window.open('https://t.me/'+botUsername,'_blank','noopener,noreferrer');notify((copied?'Copied '+c+'. ':'')+'Bot chat opened. Send '+c+' there to continue.')}));
-function callEndpoint(name,input,cb){const s=window.Telegram&&window.Telegram.WebApp&&window.Telegram.WebApp.Serverless;if(!s||typeof s.call!=='function'){cb({message:'Serverless endpoint unavailable. Open this app from the Java bot’s Serverless-hosted Mini App URL.'});return}s.call(name,input||{},(err,data)=>cb(err,data))}
-function loadProfile(){document.getElementById('profile-status').textContent='Loading live profile…';callEndpoint('getProfile',{},(err,d)=>{if(err){document.getElementById('profile-status').textContent=(err.message||'Could not load profile.')+' You can still send /profile in the bot.';document.getElementById('stats').innerHTML='<div class="stat"><small>Profile</small><strong>Unavailable</strong></div>';document.getElementById('roster').textContent='Open @'+botUsername+' and send /profile.';document.getElementById('jutsu').textContent='Open @'+botUsername+' and send /profile.';return}document.getElementById('profile-name').textContent=d.displayName||'Shinobi';document.getElementById('profile-handle').textContent=d.username?'@'+d.username:'Java bot profile';document.getElementById('avatar').textContent=(d.displayName||'❄').slice(0,1).toUpperCase();const vals=[['Rank',d.rank],['XP',d.xpText],['🍥 Coins',d.balance],['⚡ Chakra',d.chakra],['Kills',d.kills],['Claim streak',d.streak],['Last claim',d.lastClaim],['Naruto patrols',d.narutoPatrols]];document.getElementById('stats').innerHTML=vals.map(([k,v])=>'<div class="stat"><small>'+k+'</small><strong>'+String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))+'</strong></div>').join('');document.getElementById('roster').textContent=d.roster&&d.roster.length?d.roster.map(x=>x.emoji+' '+x.name).join('\n'):'— none yet —';document.getElementById('jutsu').textContent=d.jutsu&&d.jutsu.length?d.jutsu.map(x=>'🧠 '+x).join('\n'):'— none —';document.getElementById('profile-status').textContent='Synced with the existing Java bot profile data.'})}
-document.getElementById('refresh-profile').addEventListener('click',loadProfile);const user=tg&&tg.initDataUnsafe&&tg.initDataUnsafe.user;if(user)document.getElementById('welcome').textContent='Welcome, '+[user.first_name,user.last_name].filter(Boolean).join(' ')+'. Choose your path.';
-</script></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07111f">
+  <title>Frozen Blooded</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    :root{color-scheme:dark;--bg:#07111f;--panel:#0d1b2d;--panel2:#10243a;--ice:#8de7ff;--text:#edf8ff;--muted:#9bb1c5;--line:rgba(141,231,255,.16);--good:#65e6ae;--bad:#ff8791;--gold:#ffd078}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 80% 0%,rgba(49,153,205,.17),transparent 38%),radial-gradient(ellipse at 0% 75%,rgba(39,99,145,.12),transparent 38%),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+    button,textarea{font:inherit;color:inherit}button{cursor:pointer}.shell{width:min(100%,600px);margin:auto;padding:16px 15px calc(32px + env(safe-area-inset-bottom))}.top{display:flex;align-items:center;gap:11px;margin:5px 0 23px}.mark{width:43px;height:43px;border:1px solid var(--line);border-radius:14px;display:grid;place-items:center;background:#10243a;font-size:22px}.brand{font-size:12px;letter-spacing:.18em;color:var(--ice);font-weight:850}.sub{font-size:11px;color:var(--muted)}.view{display:none}.view.active{display:block}.hero{border:1px solid var(--line);border-radius:24px;padding:23px 19px;background:linear-gradient(145deg,#143049,#091626);box-shadow:0 16px 45px rgba(0,0,0,.18)}.eyebrow{color:var(--ice);font-size:10px;font-weight:800;letter-spacing:.2em;text-transform:uppercase}.hero h1,.page-title{font-size:clamp(27px,7vw,36px);line-height:1.08;letter-spacing:-.035em;margin:10px 0}.ice{color:var(--ice)}.intro,.page-desc{font-size:13px;color:#b6c9d9;margin:0 0 17px}.home-actions,.list{display:grid;gap:10px}.mode,.item,.action-card{width:100%;display:flex;align-items:center;gap:12px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:17px;background:linear-gradient(145deg,#11273d,#0a192a)}.mode{padding:17px 14px}.mode-icon,.item-icon{width:42px;height:42px;border-radius:13px;display:grid;place-items:center;background:rgba(141,231,255,.09);font-size:21px;flex-shrink:0}.mode strong,.item strong{display:block;font-size:13px;letter-spacing:.025em}.mode small,.item small{display:block;color:var(--muted);font-size:11px;margin-top:3px}.item-body{flex:1;min-width:0}.arrow{margin-left:auto;color:var(--ice);font-size:20px}.back{border:0;background:transparent;color:var(--ice);padding:7px 0;margin:0 0 9px}.page-title{margin:2px 0 6px}.page-desc{margin-bottom:16px}.section{margin:22px 0 9px;font-size:11px;letter-spacing:.14em;color:var(--ice);font-weight:850;text-transform:uppercase}.card,.profile-card,.notice{padding:15px;border:1px solid var(--line);border-radius:17px;background:var(--panel);margin:10px 0}.card-title{font-weight:800;font-size:13px}.muted{color:var(--muted);font-size:12px}.notice{border-style:dashed;color:#bfd2e1;font-size:12px}.error{border-color:rgba(255,135,145,.45);color:#ffd9dc}.error strong{color:#ffb0b6}.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}.stat{padding:11px;border-radius:13px;background:var(--panel2);min-width:0}.stat small{display:block;color:var(--muted);font-size:10px}.stat strong{display:block;font-size:14px;margin-top:3px;overflow-wrap:anywhere}.primary,.secondary,.danger,.buy-btn,.toggle-btn{border:0;border-radius:11px;padding:10px 13px;font-weight:800}.primary,.buy-btn{background:linear-gradient(100deg,#9cecff,#4dbfe8);color:#061321}.secondary{background:#18324a;border:1px solid var(--line);color:var(--ice)}.danger{background:#3c1d2a;color:#ffc4ca}.primary:disabled,.buy-btn:disabled,.toggle-btn:disabled{opacity:.55;cursor:wait}.item-row{display:flex;align-items:center;gap:9px}.item-row .item{flex:1;min-width:0}.item-row .buy-btn{padding:8px 10px;font-size:11px;white-space:nowrap}.tag{font-size:9px;color:var(--ice);border:1px solid var(--line);border-radius:99px;padding:3px 7px;white-space:nowrap}.plain{white-space:pre-line;overflow-wrap:anywhere;font-size:13px}.divider{height:1px;background:var(--line);margin:13px 0}.row-between{display:flex;align-items:center;justify-content:space-between;gap:10px}.resource-grid{display:grid;gap:8px}.link-card{display:flex;align-items:center;gap:11px;width:100%;text-align:left;padding:12px;border:1px solid var(--line);border-radius:14px;background:var(--panel)}.link-card .copy{flex:1}.link-card strong{display:block;font-size:12px}.link-card small{display:block;color:var(--muted);font-size:10px;margin-top:2px}.link-card .arrow{font-size:16px}.stats-line{color:var(--ice);font-size:12px}.command-chip{display:inline-block;padding:4px 8px;border-radius:8px;background:#142b40;color:var(--ice);font-family:ui-monospace,monospace;font-size:12px;margin:3px 4px 3px 0}.goal-input{width:100%;min-height:88px;resize:vertical;background:#071522;border:1px solid var(--line);border-radius:11px;padding:11px;margin:10px 0;color:var(--text)}.button-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.toggle-btn{font-size:11px;background:#173149;border:1px solid var(--line);padding:8px 10px}.toggle-btn.on{background:#123c35;color:#a9f6d3;border-color:rgba(101,230,174,.4)}.toggle-btn.off{background:#351f2b;color:#ffc4ca;border-color:rgba(255,135,145,.32)}details.unit{border:1px solid var(--line);background:var(--panel);border-radius:15px;margin:9px 0;overflow:hidden}details.unit summary{cursor:pointer;padding:13px;font-size:12px;font-weight:800;color:var(--ice)}.chapter{padding:12px;border-top:1px solid var(--line)}.chapter-name{font-weight:750;font-size:12px}.chapter-meta{font-size:10px;color:var(--muted);margin:3px 0}.footer{text-align:center;color:#607a91;font-size:10px;margin-top:24px}.loading{display:flex;align-items:center;gap:9px;color:var(--muted);padding:12px}.spinner{width:15px;height:15px;border:2px solid var(--line);border-top-color:var(--ice);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.success-text{color:var(--good)}.bad-text{color:var(--bad)}.gold-text{color:var(--gold)}.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(min-width:480px){.shell{padding-left:20px;padding-right:20px}.resource-grid.two{grid-template-columns:1fr 1fr}}
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="top"><div class="mark">❄</div><div><div class="brand">FROZEN BLOODED</div><div class="sub">Study · Shinobi · Community</div></div></header>
+    <div id="app" aria-live="polite"></div>
+    <div class="footer">FROZEN BLOODED · COMMUNITY HUB</div>
+  </main>
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp;
+    if (tg) { tg.ready(); tg.expand(); try { tg.setHeaderColor('#07111f'); tg.setBackgroundColor('#07111f'); } catch (_) {} }
+
+    const BOT = 'exfrozen_bot';
+    const URL = {
+      study: 'https://t.me/+ULRn7kZy-uFhNzQ1',
+      pyq: 'https://t.me/c/4471291233/243',
+      modules: 'https://t.me/c/4471291233/152',
+      otherBooks: 'https://t.me/c/4471291233/368',
+      bio11: 'https://t.me/c/2994306672/735',
+      bio12: 'https://t.me/c/2994306672/752',
+      chemistry: 'https://t.me/c/2994306672/778',
+      physics11: 'https://t.me/c/2994306672/823',
+      physics12: 'https://t.me/c/2994306672/824',
+      discussion: 'https://t.me/+ChxNR6ShlzRjMjA1',
+      library: 'https://t.me/+ULRn7kZy-uFhNzQ1',
+      todoGroup: 'https://t.me/+hRDedaMqU2liNmM1',
+      ypt: 'https://link.yeolpumta.com/P3R5cGU9Z3JvdXBJbnZpdGUmaWQ9NjE3OTA4Mw==',
+      yapping: 'https://t.me/+mlp94tMHi29jMmFl',
+      quiz: 'https://t.me/The_Migrator_Quizzes',
+      mcq: 'https://t.me/konoha_quizzes'
+    };
+
+    const state = { page: 'home', stack: [], data: null, error: null, busy: false, classKey: '11', lastClaim: null, flash: '' };
+    const root = document.getElementById('app');
+    const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const fmt = (v) => Number(v || 0).toLocaleString('en-US');
+    const user = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+    const displayName = user ? [user.first_name, user.last_name].filter(Boolean).join(' ') : 'Shinobi';
+
+    function serverlessCall(input) {
+      return new Promise((resolve, reject) => {
+        const api = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.Serverless;
+        if (!api || typeof api.call !== 'function') {
+          const error = new Error('Telegram Serverless is unavailable in this app session. Open the published Mini App from Telegram.');
+          error.type = 'UNAVAILABLE'; error.status = 0; reject(error); return;
+        }
+        api.call('miniapp', input || { action: 'bootstrap' }, (err, result) => {
+          if (err) {
+            const error = new Error(err.message || 'The Mini App endpoint could not be reached.');
+            error.type = err.type || ''; error.status = Number(err.status || 0); error.parameters = err.parameters || null;
+            reject(error); return;
+          }
+          resolve(result);
+        });
+      });
+    }
+
+    function errorHtml() {
+      if (!state.error) return '';
+      const status = state.error.status ? `HTTP ${state.error.status}` : (state.error.type || 'Connection error');
+      const hint = state.error.status === 405
+        ? 'This host is not accepting the bot’s Serverless POST endpoint. Open the current Telegram-hosted Mini App and deploy the latest bot and web build together.'
+        : 'Check that this app was opened inside Telegram from the bot’s current Mini App link, then retry.';
+      return `<div class="notice error"><strong>${esc(status)} · ${esc(state.error.message)}</strong><div style="margin-top:5px">${esc(hint)}</div><button class="secondary" data-action="retry" style="margin-top:10px">Retry connection</button></div>`;
+    }
+
+    function loadingHtml() { return `<div class="loading"><span class="spinner"></span>Syncing with the bot…</div>`; }
+    function backBar(label) { return `<button class="back" data-action="back">← ${esc(label || 'Back')}</button>`; }
+    function title(title, desc, back='Back') { return `${backBar(back)}<div class="eyebrow">Frozen Blooded</div><h1 class="page-title">${esc(title)}</h1><p class="page-desc">${esc(desc || '')}</p>`; }
+    function stat(label, value) { return `<div class="stat"><small>${esc(label)}</small><strong>${esc(value == null ? '—' : value)}</strong></div>`; }
+    function card(icon, name, desc, action, end='›') { return `<button class="item" ${action}><span class="item-icon">${icon}</span><span class="item-body"><strong>${esc(name)}</strong><small>${esc(desc)}</small></span><span class="arrow">${esc(end)}</span></button>`; }
+    function linkCard(icon, name, desc, url) { return `<button class="link-card" data-url="${esc(url)}"><span class="item-icon">${icon}</span><span class="copy"><strong>${esc(name)}</strong><small>${esc(desc)}</small></span><span class="arrow">↗</span></button>`; }
+
+    function pageHome() {
+      const status = state.error ? errorHtml() : '';
+      return `<section class="view active"><div class="hero"><div class="eyebrow">Your world, one hub</div><h1>Stay sharp.<br><span class="ice">Stay frozen.</span></h1><p class="intro">Welcome${user ? `, ${esc(displayName)}` : ''}. Choose your path.</p><div class="home-actions"><button class="mode" data-page="game"><span class="mode-icon">⚔️</span><span><strong>GAME MODE</strong><small>Live account, store and abilities</small></span><span class="arrow">›</span></button><button class="mode" data-page="study"><span class="mode-icon">📚</span><span><strong>STUDY MODE</strong><small>Resources, tracker, todos and reports</small></span><span class="arrow">›</span></button></div></div>${status || (state.data ? `<div class="notice">Connected to your bot account · balance ${fmt(state.data.balance.coins)} 🍥</div>` : loadingHtml())}</section>`;
+    }
+
+    function pageGame() {
+      return `<section class="view active">${title('Game mode','Account actions happen inside this Mini App and use the same bot database.','Home')}${errorHtml()}<div class="section">Shinobi & economy</div><div class="list">
+        ${card('🍥','Daily claim','Claim today’s coins and chakra','data-action="claim"')}
+        ${card('🪙','Balance','Coins, kills, rank and chakra','data-page="balance"')}
+        ${card('🥷','My profile','Live rank, XP, roster and stats','data-page="profile"')}
+        ${card('🎒','Inventory','Your shinobi, jutsu, gifts and chakra','data-page="inventory"')}
+        ${card('🏯','Shinobi store','Buy a shinobi or jutsu here','data-page="store"')}
+        ${card('✨','Abilities','Ability list and level-up progress','data-page="abilities"')}
+        ${card('🎁','Gift store','Gift catalog and group instructions','data-page="gifts"')}
+        ${card('🎮','Games & group commands','How to use XOXO and RPS in a group','data-page="games"')}
+      </div>${!state.data && !state.error ? loadingHtml() : ''}</section>`;
+    }
+
+    function pageStudy() {
+      return `<section class="view active">${title('Study portal','Resources and study tools linked to your bot data.','Home')}${errorHtml()}
+        <div class="section">Study material</div><div class="resource-grid">
+          ${linkCard('📚','Study material · Notes, PDFs and resources','Open the updated study portal',URL.study)}
+          ${linkCard('🔒','Join this channel first','Study-channel access',URL.study)}
+          ${linkCard('📕','PYQ books','Previous-year question books',URL.pyq)}
+          ${linkCard('📘','Modules','Module collection',URL.modules)}
+          ${linkCard('📚','Other books','Additional book resources',URL.otherBooks)}
+        </div>
+        <div class="section">Short notes</div><div class="resource-grid two">
+          ${linkCard('🧬','Class 11 Biology','Short notes',URL.bio11)}${linkCard('🧬','Class 12 Biology','Short notes',URL.bio12)}${linkCard('⚗️','Chemistry · Classes 11–12','Short notes',URL.chemistry)}${linkCard('⚛️','Class 11 Physics','Short notes',URL.physics11)}${linkCard('⚛️','Class 12 Physics','Short notes',URL.physics12)}
+        </div>
+        <div class="section">Groups & channels</div><div class="resource-grid two">
+          ${linkCard('💬','Discussion group','Quizzes, doubts and support',URL.discussion)}${linkCard('🎓','Hidden NEET Library','Book PDFs',URL.library)}${linkCard('📝','To-do sharing group','Planning and accountability',URL.todoGroup)}${linkCard('📱','YPT study group','Study-time tracking',URL.ypt)}${linkCard('🗯️','Yapping group','Community chat',URL.yapping)}${linkCard('❓','Hidden NEET Quizzes','Quiz updates',URL.quiz)}${linkCard('🧠','Konoha NEET MCQs','Conceptual polls',URL.mcq)}
+        </div>
+        <div class="section">Study tools</div><div class="list">
+          ${card('🧪','Biology tracker','Toggle Revision, Practice and PYQ here','data-page="tracker"')}
+          ${card('📝','Study report','Submit a report and mark goals/todos here','data-page="reports"')}
+          ${card('☑️','To-do','Open the bot and run the todo setup','data-start="mini_todo"')}
+          ${card('⏳','Study time','Open the bot and run the study-time setup','data-start="mini_studytime"')}
+          ${card('📅','Study dashboard','Open the bot’s study dashboard','data-start="mini_study"')}
+          ${card('🤝','Study duel','Open the bot’s group study-duel flow','data-start="mini_duel"')}
+        </div>
+      </section>`;
+    }
+
+    function pageBalance() {
+      if (!state.data) return `<section class="view active">${title('Balance','Live economy data shared with the bot.','Game mode')}${errorHtml() || loadingHtml()}</section>`;
+      const b = state.data.balance, p = state.data.profile;
+      return `<section class="view active">${title('Balance','Live economy data shared with the bot.','Game mode')}${errorHtml()}<div class="profile-card"><div class="card-title">🥷🏻 ${esc(p.displayName || displayName)}</div><div class="stats">${stat('🍥 Coins',fmt(b.coins))}${stat('🔪 Kills',fmt(b.kills))}${stat('🥷 Shinobi rank',b.rank)}${stat('⚡ Chakra',fmt(b.chakra))}</div>${b.pendingRewards ? `<div class="notice">⏳ Pending rewards: ${fmt(b.pendingRewards)} 🍥</div>` : ''}<button class="secondary" data-action="retry" style="margin-top:12px">Refresh balance</button></div></section>`;
+    }
+
+    function pageProfile() {
+      if (!state.data) return `<section class="view active">${title('Your profile','Profile data from the same account used by /profile.','Game mode')}${errorHtml() || loadingHtml()}</section>`;
+      const d=state.data.profile;
+      const roster=(d.roster||[]).length?d.roster.map(x=>`${x.emoji} ${x.name}${x.qty>1?` ×${x.qty}`:''}`).join('\n'):'— none yet —';
+      const jutsu=(d.jutsu||[]).length?d.jutsu.map(x=>`🧠 ${x}`).join('\n'):'— none —';
+      return `<section class="view active">${title('Your profile','Profile data from the same account used by /profile.','Game mode')}${errorHtml()}<div class="profile-card"><div class="row-between"><div><div class="card-title">🥷 ${esc(d.displayName || 'Shinobi')}</div><div class="muted">${d.username?'@'+esc(d.username):'Frozen Blooded account'}</div></div><div class="mark">❄</div></div><div class="stats">${stat('Rank',d.rank)}${stat('XP',d.xpText)}${stat('🍥 Coins',fmt(d.balance))}${stat('⚡ Chakra',fmt(d.chakra))}${stat('🔪 Kills',fmt(d.kills))}${stat('Claim streak',`${fmt(d.streak)}/7`)}${stat('Last claim',d.lastClaim)}${stat('Naruto patrols',fmt(d.narutoPatrols))}</div><div class="divider"></div><div class="card-title">SHINOBI ROSTER</div><div class="plain muted" style="margin-top:7px">${esc(roster)}</div><div class="divider"></div><div class="card-title">JUTSU</div><div class="plain muted" style="margin-top:7px">${esc(jutsu)}</div><button class="secondary" data-action="retry" style="margin-top:13px">Refresh profile</button></div></section>`;
+    }
+
+    function pageInventory() {
+      if (!state.data) return `<section class="view active">${title('Inventory','Owned items are read directly from the bot database.','Game mode')}${errorHtml() || loadingHtml()}</section>`;
+      const inv=state.data.inventory||[];
+      const sections=[['⚔️ Shinobi',inv.filter(x=>['shinobi','character'].includes(String(x.type).toLowerCase()))],['🌀 Jutsu',inv.filter(x=>String(x.type).toLowerCase()==='jutsu')],['🎁 Gifts',inv.filter(x=>String(x.type).toLowerCase()==='gift')],['⚡ Other items',inv.filter(x=>!['shinobi','character','jutsu','gift'].includes(String(x.type).toLowerCase()))]];
+      return `<section class="view active">${title('Inventory','Owned items are read directly from the bot database.','Game mode')}${errorHtml()}<div class="profile-card"><div class="stats">${stat('🍥 Balance',fmt(state.data.profile.balance))}${stat('⚡ Chakra',fmt(state.data.profile.chakra))}</div>${sections.map(([label,items])=>`<div class="section">${label}</div><div class="plain">${items.length?items.map(x=>`${esc(x.name)}${x.qty>1?` × ${fmt(x.qty)}`:''}`).join('<br>'):'— empty —'}</div>`).join('')}<button class="secondary" data-action="retry" style="margin-top:14px">Refresh inventory</button></div></section>`;
+    }
+
+    function pageStore() {
+      if (!state.data) return `<section class="view active">${title('Shinobi store','Buy available shinobi and jutsu directly with your bot coins.','Game mode')}${errorHtml() || loadingHtml()}</section>`;
+      const items=state.data.store||[];
+      const message=state.flash?`<div class="notice">${esc(state.flash)}</div>`:'';
+      return `<section class="view active">${title('Shinobi store',`Your balance: ${fmt(state.data.profile.balance)} 🍥 · purchases sync with the bot.`,'Game mode')}${errorHtml()}${message}<div class="list">${items.map(i=>`<div class="item-row"><div class="item"><span class="item-icon">${esc(i.emoji)}</span><span class="item-body"><strong>${esc(i.name)}</strong><small>${fmt(i.price)} 🍥 · ${esc(i.type)}</small></span></div><button class="buy-btn" data-buy="${esc(i.name)}" ${i.owned||state.busy?'disabled':''}>${state.busy? '…':i.owned?'Owned':'Buy'}</button></div>`).join('')}</div><div class="notice">Purchases deduct coins from the same account used by the bot. Shinobi and jutsu are one-time unlocks.</div></section>`;
+    }
+
+    function pageAbilities() {
+      if (!state.data) return `<section class="view active">${title('Abilities','The /ability list, with a Mini App level-up view.','Game mode')}${errorHtml() || loadingHtml()}</section>`;
+      return `<section class="view active">${title('Abilities','The /ability list, with a Mini App level-up view.','Game mode')}${errorHtml()}<div class="list">${state.data.abilities.map(a=>`<div class="card"><div class="card-title">${esc(a.name)}</div><div class="muted" style="margin-top:4px">${esc(a.description)}</div></div>`).join('')}</div><button class="primary" data-page="levels" style="margin-top:12px">⬆️ Check level up</button></section>`;
+    }
+
+    function pageLevels() {
+      if (!state.data) return `<section class="view active">${title('Level-up progress','Current progress from your bot account.','Abilities')}${errorHtml() || loadingHtml()}</section>`;
+      const d=state.data.levels;
+      return `<section class="view active">${title('Level-up progress','Current progress from your bot account.','Abilities')}${errorHtml()}<div class="card"><div class="card-title">🩸 Itachi</div><div class="stats">${stat('Kills',fmt(d.kills))}<div class="stat"><small>Current</small><strong>${esc(d.current)}</strong></div></div><div class="notice">${esc(d.next)}</div></div>${(d.itachiMilestones||[]).map(m=>`<div class="card"><div class="row-between"><strong>Level ${m.level} · ${esc(m.title)}</strong><span class="tag">${m.robGain}% rob</span></div><div class="muted">${fmt(m.kills)} kills required</div></div>`).join('')}<div class="card"><div class="card-title">🌸 Sakura training</div><div class="muted" style="margin-top:5px">${esc(d.sakura)}</div><div class="muted">Training sessions: —</div></div></section>`;
+    }
+
+    function pageGifts() {
+      const gifts=state.data?.gifts||[];
+      return `<section class="view active">${title('Gift store','Browse the catalog and send a gift in a group.','Game mode')}${errorHtml()}<div class="notice"><strong>How to gift someone:</strong><br>In a group where @${BOT} is present, reply to that person’s message and send <code>/gift &lt;number&gt;</code>. The command processes the gift in the group and updates both users’ inventories.</div><div class="list">${gifts.map(g=>`<div class="item"><span class="item-icon">${esc(g.emoji)}</span><span class="item-body"><strong>${esc(g.name)}</strong><small>Catalog number ${g.id}</small></span><span class="tag">${fmt(g.price)} 🍥</span></div>`).join('')||loadingHtml()}</div></section>`;
+    }
+
+    function pageGames() {
+      return `<section class="view active">${title('Games & group commands','These commands work in a group chat, not in this Mini App or a private bot chat.','Game mode')}<div class="card"><div class="card-title">⭕ XOXO · Tic-tac-toe</div><p class="muted">Open a group where @${BOT} is present and send <code>/xoxo</code>. Follow the game buttons in that group.</p></div><div class="card"><div class="card-title">✊ Rock Paper Scissors</div><p class="muted">Open a group where @${BOT} is present and send <code>/rps</code>.</p></div><div class="card"><div class="card-title">📜 Other group-only commands</div><p class="muted"><code>/mission</code> and <code>/patrol</code> are also group-only. Use them in a group where the bot is present.</p></div><div class="notice">This page explains the commands; it does not copy text to your clipboard or attempt to run a group command from a private chat.</div></section>`;
+    }
+
+    function pageClaim() {
+      if (!state.lastClaim) return `<section class="view active">${title('Daily claim','Claim once per IST day. The bot and Mini App share this claim.','Game mode')}${errorHtml()}<div class="card"><p class="muted">Claim today’s rewards and update your bot balance.</p><button class="primary" data-action="claim" ${state.busy?'disabled':''}>${state.busy?'Claiming…':'✅ Claim now'}</button></div></section>`;
+      const {claim:r}=state.lastClaim;
+      const bar='●'.repeat(Math.max(0,Math.min(7,Number(r.streak)||0)) )+'○'.repeat(7-Math.max(0,Math.min(7,Number(r.streak)||0)));
+      const rewards=state.lastClaim.rewards;
+      const extras=[r.sakura?`Sakura boost +${fmt(rewards.sakuraCoins)} coins and +${fmt(rewards.sakuraChakra)} chakra`:null,r.bonus?`day-seven bonus +${fmt(rewards.bonusCoins)} coins and +${fmt(rewards.bonusChakra)} chakra`:null].filter(Boolean);
+      const body=r.claimed?`<div class="success-text">✅ DAILY CLAIM</div><p>+${fmt(r.coins)} total Konoha coins 🍥<br>+${fmt(r.chakra)} total chakra ⚡</p>${extras.length?`<div class="muted">Included: ${esc(extras.join(' · '))}</div>`:''}`:`<div class="gold-text">⏳ ALREADY CLAIMED TODAY</div><p>Come back after 12:00 AM IST.</p>`;
+      return `<section class="view active">${title('Daily claim','Claim once per IST day. The bot and Mini App share this claim.','Game mode')}${errorHtml()}<div class="profile-card"><div class="card-title">${esc(displayName)}</div>${body}<div class="divider"></div><div>Streak: ${fmt(r.streak)}/7&nbsp; ${bar}</div><div>Balance: ${fmt(r.balance)} 🍥</div>${r.chakraFailed?'<div class="notice error">Chakra could not be added. Contact the owner.</div>':''}<button class="secondary" data-action="retry" style="margin-top:13px">Refresh account</button></div></section>`;
+    }
+
+    function trackerStatus(row) {
+      if (!row) return '🔴 Incomplete';
+      const counts=[row.revisionCount,row.practiceCount,row.pyqCount];
+      return counts.every(n=>Number(n)>=1)?'🟢 Completed':counts.some(n=>Number(n)>=1)?'🟡 In progress':'🔴 Incomplete';
+    }
+    function pageTracker() {
+      if (!state.data) return `<section class="view active">${title('Biology tracker','Track revision, practice and PYQs by chapter; every toggle syncs to the bot.','Study portal')}${errorHtml() || loadingHtml()}</section>`;
+      const study=state.data.study, cls=study.tracker[state.classKey], by=Object.fromEntries(study.trackerRows.map(r=>[r.chapterId,r]));
+      const units=cls.units.map(u=>`<details class="unit" open><summary>${esc(u.short)}</summary>${u.chapters.map(c=>{const r=by[c.id];const acts=[['revision','Revision','revisionDone','revisionCount'],['practice','Practice','practiceDone','practiceCount'],['pyq','PYQ','pyqDone','pyqCount']];return `<div class="chapter"><div class="row-between"><div class="chapter-name">${esc(c.id.split('_')[1])}. ${esc(c.name)}</div><span class="tag">${trackerStatus(r)}</span></div><div class="button-row">${acts.map(([key,label,done,count])=>{const isOn=r&&r[done];return `<button class="toggle-btn ${isOn?'on':'off'}" data-tracker-toggle="1" data-chapter="${esc(c.id)}" data-activity="${key}" ${state.busy?'disabled':''}>${isOn?'✅':'○'} ${label} · ×${fmt(r&&r[count])}</button>`}).join('')}</div></div>`}).join('')}</details>`).join('');
+      return `<section class="view active">${title('Biology tracker','Track revision, practice and PYQs by chapter; every toggle syncs to the bot.','Study portal')}${errorHtml()}<div class="button-row"><button class="${state.classKey==='11'?'primary':'secondary'}" data-class="11">📗 Class 11</button><button class="${state.classKey==='12'?'primary':'secondary'}" data-class="12">📘 Class 12</button></div><div class="notice">🟢 Completed · 🟡 In progress · 🔴 Incomplete. Turning a task on increments its count, matching /tracker.</div>${units}</section>`;
+    }
+
+    function pageReports() {
+      if (!state.data) return `<section class="view active">${title('Study report','Submit reports and mark todos/goals without leaving the Mini App.','Study portal')}${errorHtml() || loadingHtml()}</section>`;
+      const study=state.data.study;
+      const todos=study.todos||[], goals=study.goals||[];
+      const todoHtml=todos.length?todos.map(t=>`<div class="card"><div class="row-between"><div class="card-title">☑️ ${esc(t.text||'Todo')}</div><span class="tag">${esc(t.status)}</span></div>${t.contentType==='photo'?'<div class="muted">Image todo · open its bot check-in to view the image.</div>':''}${t.reportHour!=null?`<div class="muted">Report time: ${String(t.reportHour).padStart(2,'0')}:${String(t.reportMinute||0).padStart(2,'0')} IST</div>`:''}${t.status==='closed'?`<div class="notice">${t.completed?'✅ Completed':'❌ Not completed'} · already synced with the bot</div>`:`<div class="button-row"><button class="primary" data-todo="${t.id}" data-completed="true" ${state.busy?'disabled':''}>✅ Completed</button><button class="danger" data-todo="${t.id}" data-completed="false" ${state.busy?'disabled':''}>❌ Not completed</button></div>`}</div>`).join(''):'<div class="notice">No active todo found. Use the To-do button to create one in the bot.</div>';
+      const goalHtml=goals.length?goals.map(g=>`<div class="card"><div class="row-between"><div class="card-title">📚 Study goal · ${esc(g.goalDate||'')}</div><span class="tag">${esc(g.status)}</span></div>${g.goalText?`<div class="notice">${esc(g.goalText)}</div>`:''}${['goal_set','asked'].includes(g.status)?`<label class="muted" for="goal-${g.id}">Your report (up to 500 characters)</label><textarea class="goal-input" id="goal-${g.id}" maxlength="500" placeholder="What did you study today?"></textarea><button class="primary" data-submit-goal="${g.id}" ${state.busy?'disabled':''}>Submit report</button>`:''}${g.status==='report_submitted'?`<div class="notice">Your report: ${esc(g.reportText)}</div><div class="button-row"><button class="primary" data-goal="${g.id}" data-completed="true" ${state.busy?'disabled':''}>✅ Goal completed</button><button class="danger" data-goal="${g.id}" data-completed="false" ${state.busy?'disabled':''}>❌ Not completed</button></div>`:''}${g.status==='closed'?`<div class="notice">${g.completed?'✅ Goal completed':'❌ Goal not completed'}${g.reportText?`<br>Report: ${esc(g.reportText)}`:''}</div>`:''}</div>`).join(''):'<div class="notice">No study goal is waiting for a report. Use Study Time to create a goal in the bot.</div>';
+      return `<section class="view active">${title('Study report','Submit reports and mark todos/goals without leaving the Mini App.','Study portal')}${errorHtml()}<div class="section">Todos</div>${todoHtml}<div class="section">Study goals & reports</div>${goalHtml}<button class="secondary" data-action="retry" style="margin-top:10px">Refresh study data</button></section>`;
+    }
+
+    function render() {
+      const pages={home:pageHome,game:pageGame,study:pageStudy,balance:pageBalance,profile:pageProfile,inventory:pageInventory,store:pageStore,abilities:pageAbilities,levels:pageLevels,gifts:pageGifts,games:pageGames,claim:pageClaim,tracker:pageTracker,reports:pageReports};
+      root.innerHTML=(pages[state.page]||pageHome)();
+    }
+    function navigate(page) { state.stack.push(state.page); state.page=page; state.flash=''; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+    function back() { state.page=state.stack.pop()||'home'; render(); window.scrollTo({top:0,behavior:'smooth'}); }
+    function openTelegram(url) {
+      if (tg && /^https:\/\/t\.me\//i.test(url) && tg.openTelegramLink) tg.openTelegramLink(url);
+      else if (tg && tg.openLink) tg.openLink(url);
+      else window.open(url,'_blank','noopener,noreferrer');
+    }
+    function launchCommand(payload) { openTelegram(`https://t.me/${BOT}?start=${encodeURIComponent(payload)}`); }
+    async function refresh() {
+      if (state.busy) return;
+      state.busy=true; state.error=null; render();
+      try { state.data=await serverlessCall({action:'bootstrap'}); }
+      catch(e) { state.error=e; }
+      finally { state.busy=false; render(); }
+    }
+    async function claim() {
+      if (state.busy) return;
+      state.busy=true; state.error=null; render();
+      try { state.lastClaim=await serverlessCall({action:'claim'}); state.data=state.lastClaim.dashboard; state.page='claim'; state.flash=''; }
+      catch(e) { state.error=e; }
+      finally { state.busy=false; render(); }
+    }
+    async function buy(name) {
+      if (state.busy) return;
+      state.busy=true; state.error=null; render();
+      try {
+        const result=await serverlessCall({action:'purchase',itemName:name});
+        state.data=result.dashboard;
+        const r=result.purchase;
+        state.flash=r.status==='ok'?`Purchased ${name}. New balance: ${fmt(r.balance)} 🍥`:r.status==='owned'?'You already own this item; no coins were deducted.':r.status==='insufficient'?`Not enough coins. Current balance: ${fmt(r.balance)} 🍥.`:r.status==='failed'&&!r.safe?'The transaction status is uncertain. Do not retry yet; check your balance first.':'Purchase could not be completed. No coins were deducted.';
+      } catch(e) { state.error=e; }
+      finally { state.busy=false; render(); }
+    }
+    async function update(input, successMessage) {
+      if (state.busy) return;
+      state.busy=true; state.error=null; render();
+      try { const result=await serverlessCall(input); if(result.dashboard) state.data=result.dashboard; state.flash=successMessage||''; }
+      catch(e) { state.error=e; }
+      finally { state.busy=false; render(); }
+    }
+
+    document.addEventListener('click', async (event) => {
+      const button=event.target.closest('button'); if(!button)return;
+      if(button.dataset.action==='back'){back();return;}
+      if(button.dataset.action==='retry'){await refresh();return;}
+      if(button.dataset.page){navigate(button.dataset.page);return;}
+      if(button.dataset.url){openTelegram(button.dataset.url);return;}
+      if(button.dataset.start){launchCommand(button.dataset.start);return;}
+      if(button.dataset.action==='claim'){await claim();return;}
+      if(button.dataset.buy){await buy(button.dataset.buy);return;}
+      if(button.dataset.class){state.classKey=button.dataset.class;render();return;}
+      if(button.dataset.trackerToggle){await update({action:'tracker_toggle',chapterId:button.dataset.chapter,activity:button.dataset.activity},'Tracker updated and synced with the bot.');return;}
+      if(button.dataset.todo){await update({action:'todo_update',todoId:Number(button.dataset.todo),completed:button.dataset.completed==='true'},'Todo result saved and synced with the bot.');return;}
+      if(button.dataset.submitGoal){const box=document.getElementById(`goal-${button.dataset.submitGoal}`);await update({action:'study_report_submit',goalId:Number(button.dataset.submitGoal),text:box?box.value:''},'Study report submitted and synced with the bot.');return;}
+      if(button.dataset.goal){await update({action:'study_goal_complete',goalId:Number(button.dataset.goal),completed:button.dataset.completed==='true'},'Study goal result saved and synced with the bot.');return;}
+    });
+
+    render();
+    refresh();
+  </script>
+</body>
+</html>

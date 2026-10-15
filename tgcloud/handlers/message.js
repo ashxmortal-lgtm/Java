@@ -22,11 +22,30 @@ import {
 import { handleMapCommand, mapSweep } from '../lib/map/handler.js';
 import { handleSupportCommand, handleSupportMessage, handleSupportAdminReply } from '../lib/support_inbox.js';
 
+const MINI_APP_START_COMMANDS = {
+  mini_todo: '/todo',
+  mini_studytime: '/studytime',
+  mini_study: '/study',
+  mini_duel: '/duel',
+};
+
 export default async function (message, ctx) {
+  // Fixed, whitelisted deep-link payloads let the Mini App launch these commands
+  // directly in the bot DM without accepting arbitrary command text from a URL.
+  if (message.chat?.type === 'private') {
+    const start = String(message.text || '').trim().match(/^\/start(?:@\w+)?\s+(mini_todo|mini_studytime|mini_study|mini_duel)$/i);
+    const command = start && MINI_APP_START_COMMANDS[start[1].toLowerCase()];
+    if (command) {
+      await handleStudyCommand({ ...message, text: command });
+      return;
+    }
+  }
+
   if (await handleSupportCommand(message)) return;
   if (await handleSupportAdminReply(message)) return;
   const supportMessageHandled = await handleSupportMessage(message);
   if (supportMessageHandled && message.chat?.type === 'private') return;
+
   await notifyNewUser(message);
 
   const gameCmd = (message.text || '')
