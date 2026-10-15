@@ -25,7 +25,7 @@ const chStyle = (r) => (icon(r) === '🟢' ? 'success' : icon(r) === '🟡' ? 'p
 const getRow = (uid, chId) =>
   db.select().from(T).where(and(eq(T.userId, uid), eq(T.chapterId, chId))).get();
 
-async function toggle(uid, chId, act) {
+export async function toggleTracker(uid, chId, act) {
   const a = ACTS[act];
   if (!a) return;
   if (!(await getRow(uid, chId))) {
@@ -148,7 +148,7 @@ export async function handleTrackerCallback(cb) {
   else if (kind === 'tracker_unit') view = await unitView(uid, a);
   else if (kind === 'tracker_ch') view = await chapterView(uid, a);
   else if (kind === 'tracker_tog') {
-    if (getChapter(a) && ACTS[b]) { await toggle(uid, a, b); view = await chapterView(uid, a); }
+    if (getChapter(a) && ACTS[b]) { await toggleTracker(uid, a, b); view = await chapterView(uid, a); }
   }
   if (!view) { await api.answerCallbackQuery({ callback_query_id: cb.id, text: 'Ye button purana hai. /tracker dobara kholo.' }); return true; }
   await editBlocks(msg.chat.id, msg.message_id, view);

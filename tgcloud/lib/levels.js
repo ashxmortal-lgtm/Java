@@ -29,6 +29,22 @@ async function data(user) {
   return { kills, current, next, sakura };
 }
 
+export async function levelUpData(user) {
+  const d = await data(user);
+  return {
+    kills: d.kills,
+    current: d.current,
+    next: d.next,
+    sakura: d.sakura,
+    itachiMilestones: ITACHI.map(([kills, robGain, title], index) => ({
+      level: index + 1,
+      kills,
+      robGain,
+      title,
+    })),
+  };
+}
+
 // Classic fallback.
 export async function levelsText(user) {
   const d = await data(user);

@@ -30,7 +30,7 @@ const LEGACY_PATHS = {
   notes: ['home', 'study', 'notes'],
 };
 
-const STUDY_CHANNEL = 'https://t.me/+o_5e9GYDQDYwMzRl';
+const STUDY_CHANNEL = 'https://t.me/+ULRn7kZy-uFhNzQ1';
 const BOOK_LINKS = [
   ['✦ 𝐏𝐘𝐐 𝐁𝐎𝐎𝐊𝐒', 'https://t.me/c/4471291233/243'],
   ['✦ 𝐌𝐎𝐃𝐔𝐋𝐄', 'https://t.me/c/4471291233/152'],
@@ -46,7 +46,7 @@ const NOTE_LINKS = [
 const GROUP_LINKS = [
   ['ꜱᴛᴜᴅʏ ᴍᴀᴛᴇʀɪᴀʟ', 'https://t.me/+Dkf7sqGgUWY0MTU1', '📚', 'Short notes, updates, tricks & useful PDFs'],
   ['ᴅɪꜱᴄᴜꜱꜱɪᴏɴ ɢʀᴘ', 'https://t.me/+ChxNR6ShlzRjMjA1', '💬', 'Quizzes, doubts & support'],
-  ['ɴᴇᴇᴛ ʟɪʙʀᴀʀʏ', 'https://t.me/+lxR4mMxK-1s4MGJl', '🎓', 'Book PDFs'],
+  ['ɴᴇᴇᴛ ʟɪʙʀᴀʀʏ', 'https://t.me/+ULRn7kZy-uFhNzQ1', '🎓', 'Book PDFs'],
   ['ᴛᴏ-ᴅᴏ ꜱʜᴀʀɪɴɢ ɢʀᴘ', 'https://t.me/+hRDedaMqU2liNmM1', '📝', ''],
   ['ʏᴘᴛ ᴀᴘᴘ ɢʀᴘ', 'https://link.yeolpumta.com/P3R5cGU9Z3JvdXBJbnZpdGUmaWQ9NjE3OTA4Mw==', '📱', ''],
   ['ʏᴀᴘᴘɪɴɢ ɢʀᴘ', 'https://t.me/+mlp94tMHi29jMmFl', '🗯️', 'Off-topic bakchodi, fun & games'],
