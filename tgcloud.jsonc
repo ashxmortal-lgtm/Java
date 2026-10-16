@@ -5,6 +5,9 @@
     "spa": true,
     "headers": [
       { "path": "/*", "set": { "Referrer-Policy": "no-referrer" } }
+    ],
+    "redirects": [
+      { "from": "/profile", "to": "/profile.html", "status": 302 }
     ]
   }
 }
