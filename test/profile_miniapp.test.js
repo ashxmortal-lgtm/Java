@@ -83,14 +83,18 @@ test('profile UI loads from the bot-synced endpoint without trusting browser use
   assert.match(renderedText(content), /<img src=x onerror=alert\(1\)>/);
 });
 
-test('root and /profile pages load local profile assets and preserve the community link', () => {
-  for (const page of ['index.html', 'profile.html']) {
-    const html = read('web', page);
-    assert.match(html, /\/css\/app\.css/);
-    assert.match(html, /\/css\/profile\.css/);
-    assert.match(html, /\/js\/profile\.js/);
-    assert.match(html, /https:\/\/t\.me\/frozenblooded/);
-  }
+test('full app root and /profile command page load their respective assets', () => {
+  const app = read('web', 'index.html');
+  assert.match(app, /css\/app\.css/);
+  assert.match(app, /js\/contract\.js/);
+  assert.match(app, /js\/app\.js/);
+  assert.match(read('web', 'js', 'app.js'), /https:\/\/t\.me\/frozenblooded/);
+
+  const profile = read('web', 'profile.html');
+  assert.match(profile, /\/css\/app\.css/);
+  assert.match(profile, /\/css\/profile\.css/);
+  assert.match(profile, /\/js\/profile\.js/);
+  assert.match(profile, /https:\/\/t\.me\/frozenblooded/);
 
   const config = read('tgcloud.jsonc');
   assert.match(config, /"source":\s*"web"/);
