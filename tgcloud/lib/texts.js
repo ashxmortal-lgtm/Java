@@ -39,14 +39,3 @@ export function mention(user) {
 export function render(user, body) {
   return style(`${mention(user)}\n\n${body}`);
 }
-
-export function welcome() {
-  return (
-    `welcome to @exfrozen_bot\n` +
-    `use command below to start.\n\n` +
-    `/Claim - claim daily checkin reward\n` +
-    `/Balance - check your balance\n` +
-    `/Profile -\n` +
-    `/Inventory - open inventory`
-  );
-}

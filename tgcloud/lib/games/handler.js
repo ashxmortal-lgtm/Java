@@ -2,16 +2,15 @@
  * Commands + callbacks for XOXO and RPS (rich messages).
  */
 import { api } from '../message_api.js';
-import { mention, style, escapeHtml } from '../texts.js';
 import { fmt } from '../store.js';
 import {
-  GAME_XOXO, GAME_RPS, MIN_STAKE, COIN, STATUS_CUSTOM, STATUS_PLAYING,
+  GAME_XOXO, GAME_RPS, COIN, STATUS_CUSTOM, STATUS_PLAYING,
 } from './constants.js';
 import {
   createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby, abortXoxoMatch,
   acceptChallenge, startRpsMatch, cancelLobby, makeMove, rpsSubmitMove,
   rpsAdvanceReveal, getLobby, getPlayerLobbyId, clearPlayerLock, getStats,
-  renderLobby, gamesListBody, gamesKeyboard, parseStake,
+  renderLobby, gamesListBody, gamesKeyboard,
 } from './lobby.js';
 import { sendGameRich, editGameRich, gameBody, p } from './rich.js';
 

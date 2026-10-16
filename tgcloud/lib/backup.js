@@ -49,36 +49,78 @@ export async function runBackup(requesterChatId) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   try {
     const tables = await dumpTables();
+    const tableNames = Object.keys(tables);
     const full = utf8(JSON.stringify({ created: stamp, tables }, replacer, 2));
 
     if (full.length <= MAX_BYTES) {
       await api.sendDocument({
         chat_id: OWNER_ID,
         document: new InputFile(full, `backup-${stamp}.json`, { type: 'application/json' }),
-        caption: `Database backup: ${Object.keys(tables).length} table(s)`,
+        caption: `Database backup: ${tableNames.length} table(s)`,
       });
     } else {
-      // Too big for one file: send one file per table
+      // Too big for one file: send one file per table, splitting if a table exceeds MAX_BYTES
+      const failedTables = [];
       for (const [name, t] of Object.entries(tables)) {
-        const bytes = utf8(JSON.stringify({ table: name, ...t }, replacer, 2));
-        await api.sendDocument({
-          chat_id: OWNER_ID,
-          document: new InputFile(bytes, `backup-\( {stamp}- \){name}.json`, { type: 'application/json' }),
-        });
+        const tableJson = JSON.stringify({ table: name, create_sql: t.create_sql, row_count: t.row_count, rows: t.rows }, replacer, 2);
+        const bytes = utf8(tableJson);
+        if (bytes.length <= MAX_BYTES) {
+          try {
+            await api.sendDocument({
+              chat_id: OWNER_ID,
+              document: new InputFile(bytes, `backup-${stamp}-${name}.json`, { type: 'application/json' }),
+              caption: `Database table: ${name} (${t.row_count} rows)`,
+            });
+          } catch (err) {
+            console.error(`Failed to send backup for table ${name}:`, err);
+            failedTables.push(name);
+          }
+        } else {
+          // Table itself exceeds MAX_BYTES: split rows across numbered parts
+          const partsCount = Math.ceil(bytes.length / (MAX_BYTES * 0.8));
+          const rowsPerPart = Math.max(1, Math.floor(t.rows.length / partsCount));
+          const totalParts = Math.ceil(t.rows.length / rowsPerPart);
+          for (let part = 0; part < totalParts; part++) {
+            const slice = t.rows.slice(part * rowsPerPart, (part + 1) * rowsPerPart);
+            const partBytes = utf8(JSON.stringify({
+              table: name,
+              create_sql: t.create_sql,
+              part: part + 1,
+              total_parts: totalParts,
+              chunk_row_count: slice.length,
+              rows: slice,
+            }, replacer, 2));
+            try {
+              await api.sendDocument({
+                chat_id: OWNER_ID,
+                document: new InputFile(partBytes, `backup-${stamp}-${name}-part${part + 1}.json`, { type: 'application/json' }),
+                caption: `Table ${name} (part ${part + 1}/${totalParts}, ${slice.length} rows)`,
+              });
+            } catch (err) {
+              console.error(`Failed to send part ${part + 1} for table ${name}:`, err);
+              failedTables.push(`${name}-part${part + 1}`);
+            }
+          }
+        }
+      }
+      if (failedTables.length > 0) {
+        throw new Error(`Failed to upload ${failedTables.length} table backup file(s): ${failedTables.join(', ')}`);
       }
     }
-    if (requesterChatId !== OWNER_ID) {
+    if (requesterChatId && requesterChatId !== OWNER_ID) {
       await notice(requesterChatId, 'Backup sent to your DM.');
     }
   } catch (e) {
     console.error('backup failed', e);
     const dmBlocked = e instanceof BotApiError && (e.code === 403 || e.code === 400);
-    await notice(requesterChatId, dmBlocked
+    const msg = dmBlocked
       ? 'I cannot DM you. Open the bot privately and press Start first.'
-      : 'Backup failed. Check the logs.');
+      : `Backup failed: ${e?.message || 'Check logs'}`;
+    try {
+      await notice(requesterChatId || OWNER_ID, msg);
+    } catch (_) {}
   }
 }
-
 
 // Status texts go out as rich messages; plain text only if Telegram refuses the rich one.
 async function notice(chatId, text) {
@@ -93,31 +135,38 @@ async function notice(chatId, text) {
   }
 }
 
-// Sends a bundled snapshot of the project source. Refresh source_snapshot.js
-// after changing project files, then redeploy. This does not read the runtime filesystem.
+// Sends a complete restorable snapshot of the project source code, config,
+// frontend assets, and documentation. Refresh source_snapshot.js after changing
+// project files, then redeploy. This does not read the runtime filesystem.
 export async function runFullBackup(requesterChatId) {
-  if (requesterChatId !== OWNER_ID) return;
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   try {
-    const bytes = utf8(JSON.stringify({
+    const backupData = {
       format: 'tgcloud-source-snapshot-v1',
       created: stamp,
-      note: 'Bundled source snapshot. Refresh and redeploy after source changes.',
+      note: 'Complete restorable project backup. Includes handlers, endpoints, libraries, configs, frontend assets, workflows, and documentation; excludes dependencies and secrets.',
       files: SOURCE_SNAPSHOT,
-    }, null, 2));
-    if (bytes.length > MAX_BYTES) throw new Error('Source snapshot exceeds Telegram upload limit.');
+    };
+    const bytes = utf8(JSON.stringify(backupData, null, 2));
+    if (bytes.length > MAX_BYTES) {
+      throw new Error(`Source backup size (${bytes.length} bytes) exceeds limit (${MAX_BYTES} bytes).`);
+    }
     await api.sendDocument({
       chat_id: OWNER_ID,
-      document: new InputFile(bytes, `my_bot_full_source-${stamp}.json`, { type: 'application/json' }),
-      caption: `Full source snapshot: ${SOURCE_SNAPSHOT.length} file(s). Includes source, schema, docs and project config; excludes dependencies and secrets.`,
+      document: new InputFile(bytes, `project_full_backup-${stamp}.json`, { type: 'application/json' }),
+      caption: `Full project backup: ${SOURCE_SNAPSHOT.length} file(s). Includes source code, configuration, web assets and documentation.`,
     });
+    if (requesterChatId && requesterChatId !== OWNER_ID) {
+      await notice(requesterChatId, 'Full project backup sent to your DM.');
+    }
   } catch (e) {
     console.error('full source backup failed', e);
+    const dmBlocked = e instanceof BotApiError && (e.code === 403 || e.code === 400);
+    const msg = dmBlocked
+      ? 'I cannot DM you. Open the bot privately and press Start first.'
+      : `Full source backup failed: ${e?.message || 'Check logs'}`;
     try {
-      await notice(requesterChatId, 'Full source backup failed. Check the deployment logs.');
+      await notice(requesterChatId || OWNER_ID, msg);
     } catch (_) {}
   }
 }
-
-
-

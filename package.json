@@ -7,6 +7,10 @@
   "scripts": {
     "deploy": "tgcloud push",
     "status": "tgcloud status",
-    "run": "tgcloud run"
-  }
+    "run": "tgcloud run",
+    "test": "node --test test/**/*.test.js",
+    "validate": "node scripts/validate.js && npm test",
+    "generate:snapshot": "node scripts/generate_snapshot.js"
+  },
+  "type": "module"
 }

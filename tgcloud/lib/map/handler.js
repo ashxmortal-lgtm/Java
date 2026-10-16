@@ -3,11 +3,10 @@
  * Map artwork remains a photo; all controls are Telegram Rich Message buttons.
  */
 
-import { BotApiError } from 'sdk';
 import { api } from '../message_api.js';
 import { db } from 'sdk';
 import { sql } from 'sdk/db';
-import { style, escapeHtml, mention } from '../texts.js';
+import { style, escapeHtml } from '../texts.js';
 import { screenText, screenKeyboard, fmt } from '../store.js';
 import { runActivity, KINDS } from '../activities.js';
 import { MAP_ENABLED, MAX_CHAKRA } from './constants.js';
@@ -44,7 +43,6 @@ import { getMapPhotoFileId, storageIdForLocation } from './media.js';
 import { showCatalog, catalogBlocks } from '../gift.js';
 import { storeContent, abilityContent, editRichOr, richOr } from '../rich.js';
 import { abilityText, abilityKeyboard } from '../ability.js';
-import { render } from '../texts.js';
 import { send } from '../chat.js';
 
 const EMO = {

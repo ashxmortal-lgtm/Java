@@ -7,10 +7,10 @@ import {
   claimDaily, DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA,
   SAKURA_COINS, SAKURA_CHAKRA,
 } from './economy.js';
-import { welcome, render, style, escapeHtml, COIN } from './texts.js';
+import { render, style, escapeHtml, COIN } from './texts.js';
 import { SCREENS, screenText, screenKeyboard, fmt } from './store.js';
 import { handleBuy } from './buy.js';
-import { inventoryText, sendInventory } from './inventory.js';
+import { sendInventory } from './inventory.js';
 import { addCoins, OWNER_ID } from './admin.js';
 import { runActivity, sweepActivities } from './activities.js';
 import { grantStarter, STARTER_NOTICE } from './starter.js';
@@ -21,18 +21,8 @@ import { economyLocked, ECO_LOCKED_TEXT } from './groupadmin.js';
 import { richOr, editRichOr, storeContent, abilityContent, groupOnlyContent } from './rich.js';
 import { helpText } from './help.js';
 import { profileText } from './profile.js';
-import { sendWelcome, buildUserHelpBlocks, primaryKeyboard } from './welcome_ui.js';
+import { sendWelcome, buildUserHelpBlocks } from './welcome_ui.js';
 
-const OWNER_HELP_EXTRA = `
-
-𝐎𝐖𝐍𝐄𝐑
-/diss_grp &lt;chat_id&gt; — Disapprove a group by chat ID
-/stats — Bot usage &amp; approval statistics
-/approved_list — Approved groups directory
-
-𝐉𝐔𝐓𝐒𝐔
-/mt &lt;message&gt; — Mind Transmission (reply in group; needs jutsu from /shinobi_store)
-`;
 import { send, sweepMessages, trackUser } from './chat.js';
 
 const BOT_USERNAME = 'exfrozen_bot';
