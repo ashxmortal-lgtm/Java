@@ -15,7 +15,7 @@ import { GIFTS } from '../lib/gift.js';
 import { ROWS as ABILITY_ROWS } from '../lib/ability.js';
 import { levelUpData } from '../lib/levels.js';
 import { pendingRewardTotal } from '../lib/map/pending.js';
-import { BIOLOGY_TRACKER, getChapter } from '../lib/study/tracker_data.js';
+import { getChapter, miniAppTrackerCatalog } from '../lib/study/tracker_data.js';
 import { toggleTracker } from '../lib/study/tracker.js';
 import { istNow, nowIso } from '../lib/study/common.js';
 
@@ -216,7 +216,7 @@ async function dashboard(user) {
     gifts: GIFTS.map(({ id, emoji, name, price }) => ({ id, emoji, name, price })),
     study: {
       today: istNow().date,
-      tracker: BIOLOGY_TRACKER,
+      tracker: miniAppTrackerCatalog(),
       trackerRows: trackerRows.map((r) => ({
         chapterId: r.chapterId,
         revisionCount: r.revisionCount,

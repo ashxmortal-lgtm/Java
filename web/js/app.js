@@ -308,7 +308,7 @@
       return '<section>' + pageHead('Biology tracker', 'The same study menu as /tracker.', 'Study mode') + (errorHtml() || loadingHtml()) + '</section>';
     }
     const study = state.data.study;
-    const cls = study.tracker[state.classKey];
+    const cls = study.tracker['class_' + state.classKey];
     if (!cls) return '<section>' + pageHead('Biology tracker', 'That class is not in the bot payload.', 'Study mode') + '<div class="notice">No chapter list.</div></section>';
     const by = Object.fromEntries((study.trackerRows || []).map((r) => [r.chapterId, r]));
     const units = (cls.units || []).map((u) => {
