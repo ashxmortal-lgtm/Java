@@ -1,4 +1,4 @@
-import { db, EndpointError } from 'sdk';
+import { api, db, EndpointError } from 'sdk';
 import { and, eq } from 'sdk/db';
 import {
   biology_tracker,
@@ -24,6 +24,121 @@ const safeId = (value) => Number.isSafeInteger(Number(value)) && Number(value) >
 const drafts = new Set(['collecting', 'choosing', 'custom']);
 const todoStatuses = new Set(['scheduled', 'asked', 'closed']);
 const goalStatuses = new Set(['goal_set', 'asked', 'report_submitted', 'closed']);
+const ERROR_REPORT_OWNER_ID = 8716863150;
+const ERROR_REPORT_CHUNK_SIZE = 3500;
+const ERROR_REPORT_DEDUPE_MS = 60_000;
+const ERROR_REPORT_DEDUPE_LIMIT = 100;
+const recentErrorReports = new Map();
+const MINIAPP_ACTIONS = new Set([
+  'bootstrap', 'claim', 'purchase', 'todo_update', 'study_report_submit',
+  'study_goal_complete', 'tracker_toggle',
+]);
+
+function sanitizeDiagnosticText(value, user) {
+  let text = String(value ?? '');
+  for (const key of ['id', 'username', 'first_name', 'last_name', 'phone_number']) {
+    let personalValue;
+    try { personalValue = user?.[key]; } catch (_) {}
+    if (typeof personalValue === 'string' || typeof personalValue === 'number') {
+      const secret = String(personalValue);
+      if (secret.length >= 2) text = text.split(secret).join('[redacted user data]');
+    }
+  }
+  return text
+    .replace(/\b\d{6,}:[A-Za-z0-9_-]{20,}\b/g, '[redacted bot token]')
+    .replace(/\bTMA\s+[A-Za-z0-9+/=_-]{16,}/gi, 'TMA [redacted initData]')
+    .replace(/\b(initData|init_data|tgWebAppData)\s*[:=]\s*[^,\s;]+/gi, '$1=[redacted]')
+    .replace(/\b(authorization)\s*[:=]\s*[^\r\n,;]+/gi, '$1=[redacted]')
+    .replace(/\b(token|secret|password)\s*[:=]\s*[^,\s;]+/gi, '$1=[redacted]')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[redacted email]')
+    .replace(/(?:\+?\d{1,3}[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}\b/g, '[redacted phone number]')
+    .replace(/@[A-Za-z0-9_]{5,}/g, '[redacted handle]')
+    .replace(/\b\d{6,20}\b/g, '[redacted numeric identifier]');
+}
+
+function errorField(error, field, fallback) {
+  try {
+    const value = error?.[field];
+    return typeof value === 'string' && value ? value : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function errorFingerprint(value) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+function isDuplicateErrorReport(fingerprint, now) {
+  for (const [key, expiresAt] of recentErrorReports) {
+    if (expiresAt <= now) recentErrorReports.delete(key);
+  }
+  if (recentErrorReports.has(fingerprint)) return true;
+  recentErrorReports.set(fingerprint, now + ERROR_REPORT_DEDUPE_MS);
+  while (recentErrorReports.size > ERROR_REPORT_DEDUPE_LIMIT) {
+    recentErrorReports.delete(recentErrorReports.keys().next().value);
+  }
+  return false;
+}
+
+function splitTelegramText(text, limit = ERROR_REPORT_CHUNK_SIZE) {
+  const chunks = [];
+  let chunk = '';
+  for (const character of text) {
+    if (chunk.length + character.length > limit) {
+      chunks.push(chunk);
+      chunk = '';
+    }
+    chunk += character;
+  }
+  if (chunk || chunks.length === 0) chunks.push(chunk);
+  return chunks;
+}
+
+async function reportMiniAppRuntimeError(error, action, user) {
+  try {
+    const safeAction = MINIAPP_ACTIONS.has(action) ? action : 'unknown';
+    const name = sanitizeDiagnosticText(
+      errorField(error, 'name', 'NonErrorThrow'), user,
+    );
+    const message = sanitizeDiagnosticText(
+      errorField(error, 'message', String(error)), user,
+    );
+    const stack = sanitizeDiagnosticText(
+      errorField(error, 'stack', '(stack unavailable)'), user,
+    );
+    const fingerprint = errorFingerprint(`${safeAction}\n${name}\n${message}\n${stack}`);
+    const now = Date.now();
+    if (isDuplicateErrorReport(fingerprint, now)) return;
+
+    const timestamp = new Date(now).toISOString();
+    const report = [
+      'Frozen Blooded Mini App runtime error',
+      'Endpoint: miniapp',
+      `Action: ${safeAction}`,
+      `Timestamp: ${timestamp}`,
+      `Error name: ${name}`,
+      `Error message: ${message}`,
+      'Stack:',
+      stack,
+    ].join('\n');
+    const chunks = splitTelegramText(report);
+    for (let i = 0; i < chunks.length; i += 1) {
+      await api.sendMessage({
+        chat_id: ERROR_REPORT_OWNER_ID,
+        text: `[Mini App error ${fingerprint} | part ${i + 1}/${chunks.length}]\n${chunks[i]}`,
+      });
+    }
+  } catch (reportError) {
+    try { console.error('Mini App owner error report failed; preserving original exception.', reportError); } catch (_) {}
+  }
+}
+
 
 function byUpdatedAt(a, b) {
   return String(b.updatedAt || b.createdAt || '').localeCompare(String(a.updatedAt || a.createdAt || ''));
@@ -108,7 +223,7 @@ async function dashboard(user) {
   };
 }
 
-export default async function (input, ctx) {
+async function handleMiniApp(input, ctx) {
   // The platform verifies initData. Never accept an account ID from the browser.
   const user = ctx?.initData?.user;
   if (!user || !safeId(user.id)) {
@@ -213,4 +328,21 @@ export default async function (input, ctx) {
   }
 
   fail('Unknown Mini App action.', 'UNKNOWN_ACTION');
+}
+
+export default async function (input, ctx) {
+  const rawAction = input?.action;
+  const requestedAction = typeof rawAction === 'string'
+    ? (rawAction || 'bootstrap')
+    : (rawAction == null ? 'bootstrap' : 'unknown');
+  const action = MINIAPP_ACTIONS.has(requestedAction) ? requestedAction : 'unknown';
+  try {
+    return await handleMiniApp(input, ctx);
+  } catch (error) {
+    if (error instanceof EndpointError) throw error;
+    try { console.error(`[miniapp] ${action} runtime exception`, error); } catch (_) {}
+    try { await reportMiniAppRuntimeError(error, action, ctx?.initData?.user); } catch (_) {}
+    // Rethrow the original: TGCloud returns a generic 500 to the Mini App.
+    throw error;
+  }
 }
