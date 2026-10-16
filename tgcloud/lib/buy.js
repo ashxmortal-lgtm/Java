@@ -1,6 +1,4 @@
-import { db } from 'sdk';
 import { findItem, fmt, CHAKRA_RATE, CHAKRA_MIN } from './store.js';
-import { getBalance } from './economy.js';
 import { purchase } from './purchase.js';
 
 

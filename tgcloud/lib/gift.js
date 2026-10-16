@@ -1,4 +1,4 @@
-import { db, BotApiError } from 'sdk';
+import { db } from 'sdk';
 import { api } from './message_api.js';
 import { eq, and } from 'sdk/db';
 import { users, inventory } from '../schema.js';

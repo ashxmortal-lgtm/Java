@@ -18,8 +18,7 @@ import {
   matchWinner, leaders,
 } from './engine_rps.js';
 import { p, h } from './rich.js';
-import { escapeHtml, style, mention } from '../texts.js';
-import { fmt } from '../store.js';
+import { style, mention } from '../texts.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 

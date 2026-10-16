@@ -25,12 +25,18 @@ jobs:
 
       - run: npm ci
 
-      - name: Sync cloud snapshot
+      - name: Validate syntax, imports and run test suite
+        run: npm run validate
+
+      # Fetch remote cloud revision metadata to check for concurrency conflicts.
+      # Note: tgcloud fetch updates local revision records and does not merge or overwrite repository working files.
+      - name: Sync cloud revision metadata
         run: npx tgcloud fetch
         env:
           TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
 
-      - name: Deploy
+      # Push changes to TGCloud. Never pass --force so remote revision conflicts safely abort deployment.
+      - name: Deploy to TGCloud
         run: npx tgcloud push
         env:
           TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}

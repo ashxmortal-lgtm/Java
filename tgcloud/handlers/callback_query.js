@@ -1,6 +1,5 @@
 import { handleStudyCallback } from '../lib/study/router.js';
 import { handleTopicCallback } from '../lib/topic.js';
-import { api } from '../lib/message_api.js';
 import { handleHncCallback } from '../lib/hnc.js';
 import { handleEconomyCallback } from '../lib/economy_handler.js';
 import { handleGroupAdminCallback } from '../lib/groupadmin.js';

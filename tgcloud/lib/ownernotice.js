@@ -1,4 +1,4 @@
-import { db, BotApiError } from 'sdk';
+import { db } from 'sdk';
 import { api } from './message_api.js';
 import { eq } from 'sdk/db';
 import { users, knownGroups as KG, supportConversations } from '../schema.js';
@@ -117,6 +117,15 @@ export async function notifyBlockedOrRemoved(update) {
     if (!chat) return;
     const was = update.old_chat_member?.status;
     const now = update.new_chat_member?.status;
+    // Private chat unblock
+    if (chat.type === "private" && (was === "kicked" || was === "left") && (now === "member" || now === "administrator")) {
+      const id = update.from?.id || chat.id;
+      try {
+        await db.update(users).set({ blocked: 0 }).where(eq(users.telegramId, id)).run();
+      } catch (e) { console.error("unblocked flag update failed", e); }
+      return;
+    }
+
     const wasIn = was === 'member' || was === 'administrator' || was === 'restricted' || was === 'creator';
     const isOut = now === 'kicked' || now === 'left';
     if (!(wasIn && isOut)) return;
