@@ -18,6 +18,9 @@
     page: 'home',
     stack: [],
     data: null,
+    profile: null,
+    profileBusy: false,
+    profileError: null,
     error: null,
     busy: false,
     classKey: '11',
@@ -41,7 +44,7 @@
     return !!(api && typeof api.call === 'function');
   }
 
-  function serverlessCall(input) {
+  function serverlessCall(input, endpointName) {
     return new Promise((resolve, reject) => {
       const api = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.Serverless;
       if (!api || typeof api.call !== 'function') {
@@ -52,7 +55,7 @@
         return;
       }
       // Official contract: callback result is the endpoint return value, already unwrapped.
-      api.call('miniapp', input || { action: 'bootstrap' }, (err, result) => {
+      api.call(endpointName || 'miniapp', input || { action: 'bootstrap' }, (err, result) => {
         if (err) {
           const error = new Error(err.message || 'The Mini App endpoint could not be reached.');
           error.type = err.type || '';
@@ -170,6 +173,7 @@
         + stat('Kills', fmt(b.kills))
         + '</div></div>';
     }
+    if (!state.data) account += '<button class="secondary" data-page="profile">Open profile without dashboard sync</button>';
     const L = C.LINKS;
     return '<section><div class="hero"><div class="eyebrow">Your world, one hub</div><h1>Stay sharp.<br><span class="ice">Stay frozen.</span></h1><p class="intro">'
       + (who ? 'Welcome, ' + esc(who) + '. Choose a path. This screen does not switch the bot’s operating mode.' : 'Choose a path. Live account data loads only inside Telegram.')
@@ -263,14 +267,19 @@
   }
 
   function pageProfile() {
-    if (!state.data) return '<section>' + needData('Your profile', 'Same account /profile reads. The browser does not choose the user id.', 'Game mode') + '</section>';
-    const d = state.data.profile;
+    const head = pageShell('Your profile', 'Synced from the same getProfile endpoint used by /profile, independently of dashboard bootstrap.', 'Game mode');
+    if (!state.profile) {
+      const status = state.profileError
+        ? '<div class="notice error">Your profile could not be synced. The account was not changed.</div><button class="secondary" data-action="retry" style="margin-top:12px">Retry profile sync</button>'
+        : loadingHtml('Syncing your profile with the bot…');
+      return '<section>' + head + status + '</section>';
+    }
+    const d = state.profile;
     const roster = (d.roster || []).length
       ? d.roster.map((x) => (x.emoji || '🥷') + ' ' + x.name + (x.qty > 1 ? ' ×' + x.qty : '')).join('\n')
       : '— none yet —';
     const jutsu = (d.jutsu || []).length ? d.jutsu.map((x) => x).join('\n') : '— none —';
-    return '<section>' + pageShell('Your profile', 'Loaded by miniapp bootstrap through the bot’s profile helper.', 'Game mode')
-      + errorHtml()
+    return '<section>' + head
       + '<div class="profile-card"><div class="row-between"><div><div class="card-title">' + esc(d.displayName || 'Shinobi') + '</div><div class="muted">'
       + (d.username ? '@' + esc(d.username) : 'No public username')
       + '</div></div><div class="mark">❄</div></div><div class="stats">'
@@ -499,6 +508,7 @@
     state.confirm = null;
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (page === 'profile') refreshProfile();
   }
 
   function goNav(page) {
@@ -508,6 +518,7 @@
     state.confirm = null;
     render();
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (page === 'profile') refreshProfile();
   }
 
   function back() {
@@ -541,6 +552,26 @@
       state.error = e;
     } finally {
       state.busy = false;
+      render();
+    }
+  }
+
+  async function refreshProfile() {
+    if (state.profileBusy) return;
+    state.profileBusy = true;
+    state.profileError = null;
+    render();
+    try {
+      const profile = C.unwrapPayload(await serverlessCall({}, 'getProfile'));
+      if (!profile || typeof profile !== 'object' || !Array.isArray(profile.roster)
+          || !Array.isArray(profile.jutsu) || typeof profile.rank !== 'string') {
+        throw Object.assign(new Error('Profile endpoint returned an unexpected payload.'), { type: 'BAD_PAYLOAD' });
+      }
+      state.profile = profile;
+    } catch (e) {
+      state.profileError = e;
+    } finally {
+      state.profileBusy = false;
       render();
     }
   }
@@ -633,7 +664,11 @@
     if (!button || !root || !root.contains(button)) return;
     if (button.dataset.action === 'back') { back(); return; }
     if (button.dataset.nav) { goNav(button.dataset.nav); return; }
-    if (button.dataset.action === 'retry') { await refresh(); return; }
+    if (button.dataset.action === 'retry') {
+      if (state.page === 'profile') await refreshProfile();
+      else await refresh();
+      return;
+    }
     if (button.dataset.page) { navigate(button.dataset.page); return; }
     if (button.dataset.url) { openExternal(button.dataset.url); return; }
     if (button.dataset.start) { launchStart(button.dataset.start); return; }
