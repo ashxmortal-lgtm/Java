@@ -56,3 +56,18 @@ test('Frontend app and contract files exist and define expected constants', () =
   assert(messageJs.includes('mini_todo'), 'bot must accept the todo deep link');
   assert(messageJs.includes('mini_studytime'), 'bot must accept the studytime deep link');
 });
+
+test('Mini App tracker catalog uses serializer-safe class keys and preserves both classes', async () => {
+  const { BIOLOGY_TRACKER, miniAppTrackerCatalog } = await import('../tgcloud/lib/study/tracker_data.js');
+  const catalog = miniAppTrackerCatalog();
+  assert.deepEqual(Object.keys(catalog), ['class_11', 'class_12']);
+  assert.deepEqual(catalog.class_11, BIOLOGY_TRACKER['11']);
+  assert.deepEqual(catalog.class_12, BIOLOGY_TRACKER['12']);
+  assert.equal(JSON.parse(JSON.stringify(catalog)).class_11.label, 'Class 11');
+  assert.equal(JSON.parse(JSON.stringify(catalog)).class_12.label, 'Class 12');
+
+  const endpointJs = fs.readFileSync(path.join(repoRoot, 'tgcloud', 'endpoints', 'miniapp.js'), 'utf8');
+  const appJs = fs.readFileSync(path.join(repoRoot, 'web', 'js', 'app.js'), 'utf8');
+  assert.match(endpointJs, /tracker:\s*miniAppTrackerCatalog\(\)/);
+  assert.match(appJs, /study\.tracker\['class_' \+ state\.classKey\]/);
+});

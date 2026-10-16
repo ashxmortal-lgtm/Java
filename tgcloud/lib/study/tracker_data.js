@@ -43,6 +43,12 @@ export const BIOLOGY_TRACKER = {
   },
 };
 
+export function miniAppTrackerCatalog() {
+  return Object.fromEntries(
+    Object.entries(BIOLOGY_TRACKER).map(([classKey, details]) => [`class_${classKey}`, details]),
+  );
+}
+
 export const ALL_UNITS = Object.values(BIOLOGY_TRACKER).flatMap((c) => c.units);
 export const ALL_CHAPTERS = ALL_UNITS.flatMap((u) => u.chapters.map((c) => ({ ...c, unitId: u.id })));
 export const getUnit = (unitId) => ALL_UNITS.find((u) => u.id === unitId) || null;
