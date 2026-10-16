@@ -1,13 +1,3 @@
 {
-  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json",
-  "static": {
-    "source": "web",
-    "spa": true,
-    "headers": [
-      { "path": "/*", "set": { "Referrer-Policy": "no-referrer" } }
-    ],
-    "redirects": [
-      { "from": "/profile", "to": "/profile.html", "status": 302 }
-    ]
-  }
+  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json"
 }

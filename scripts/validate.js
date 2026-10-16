@@ -75,12 +75,7 @@ import('../tgcloud/lib/source_snapshot.js').then(({ SOURCE_SNAPSHOT }) => {
     'tgcloud/schema.js',
     'tgcloud/handlers/message.js',
     'tgcloud/handlers/callback_query.js',
-    'tgcloud/endpoints/miniapp.js',
     'tgcloud/endpoints/getProfile.js',
-    'web/index.html',
-    'web/profile.html',
-    'web/js/app.js',
-    'web/js/contract.js',
     '.github/workflows/deploy.yml'
   ];
 

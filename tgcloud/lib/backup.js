@@ -136,7 +136,7 @@ async function notice(chatId, text) {
 }
 
 // Sends a complete restorable snapshot of the project source code, config,
-// frontend assets, and documentation. Refresh source_snapshot.js after changing
+// project files and documentation. Refresh source_snapshot.js after changing
 // project files, then redeploy. This does not read the runtime filesystem.
 export async function runFullBackup(requesterChatId) {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -144,7 +144,7 @@ export async function runFullBackup(requesterChatId) {
     const backupData = {
       format: 'tgcloud-source-snapshot-v1',
       created: stamp,
-      note: 'Complete restorable project backup. Includes handlers, endpoints, libraries, configs, frontend assets, workflows, and documentation; excludes dependencies and secrets.',
+      note: 'Complete restorable project backup. Includes handlers, endpoints, libraries, configs, workflows, and documentation; excludes dependencies and secrets.',
       files: SOURCE_SNAPSHOT,
     };
     const bytes = utf8(JSON.stringify(backupData, null, 2));
@@ -154,7 +154,7 @@ export async function runFullBackup(requesterChatId) {
     await api.sendDocument({
       chat_id: OWNER_ID,
       document: new InputFile(bytes, `project_full_backup-${stamp}.json`, { type: 'application/json' }),
-      caption: `Full project backup: ${SOURCE_SNAPSHOT.length} file(s). Includes source code, configuration, web assets and documentation.`,
+      caption: `Full project backup: ${SOURCE_SNAPSHOT.length} file(s). Includes source code, configuration and documentation.`,
     });
     if (requesterChatId && requesterChatId !== OWNER_ID) {
       await notice(requesterChatId, 'Full project backup sent to your DM.');

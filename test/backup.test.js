@@ -4,7 +4,7 @@ import { SOURCE_SNAPSHOT } from '../tgcloud/lib/source_snapshot.js';
 
 test('SOURCE_SNAPSHOT contains complete project files and no sensitive data', () => {
   assert(Array.isArray(SOURCE_SNAPSHOT), 'SOURCE_SNAPSHOT should be an array');
-  assert(SOURCE_SNAPSHOT.length >= 80, `Expected at least 80 files in snapshot, got ${SOURCE_SNAPSHOT.length}`);
+  assert(SOURCE_SNAPSHOT.length >= 50, `Expected at least 50 files in snapshot, got ${SOURCE_SNAPSHOT.length}`);
 
   const paths = SOURCE_SNAPSHOT.map((f) => f.path);
 
@@ -15,15 +15,9 @@ test('SOURCE_SNAPSHOT contains complete project files and no sensitive data', ()
     'tgcloud/schema.js',
     'tgcloud/handlers/message.js',
     'tgcloud/handlers/callback_query.js',
-    'tgcloud/endpoints/miniapp.js',
     'tgcloud/endpoints/getProfile.js',
     'tgcloud/lib/economy_handler.js',
     'tgcloud/lib/backup.js',
-    'web/index.html',
-    'web/profile.html',
-    'web/js/app.js',
-    'web/js/contract.js',
-    'web/js/profile.js',
     '.github/workflows/deploy.yml'
   ];
 
