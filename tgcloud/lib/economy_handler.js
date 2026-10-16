@@ -197,7 +197,13 @@ export async function handleEconomyCommand(message, ctx) {
         parse_mode: 'HTML',
       });
     } else if (cmd === 'profile') {
-      await reply(message, await profileText(user));
+      const profileAppButton = message.chat.type === 'private'
+        ? { reply_markup: { inline_keyboard: [[{
+          text: 'Open Profile Mini App',
+          web_app: { url: 'https://app8868570312.tgcloud.ai/profile' },
+        }]] } }
+        : {};
+      await reply(message, await profileText(user), profileAppButton);
     }
   } catch (e) {
     console.error(e);
