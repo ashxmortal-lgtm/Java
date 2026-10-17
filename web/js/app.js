@@ -8,8 +8,8 @@
     tg.ready();
     try { tg.expand(); } catch (_) {}
     try {
-      tg.setHeaderColor('#9ec4dc');
-      tg.setBackgroundColor('#aec8dc');
+      tg.setHeaderColor('#122033');
+      tg.setBackgroundColor('#0b1622');
     } catch (_) {}
   }
 
@@ -128,7 +128,7 @@
   }
 
   function shell(inner) {
-    return '<div class="shell"><header class="top"><div class="snow" aria-hidden="true">❄️</div><div><div class="brand">FROZEN BLOODED</div><div class="sub">pastel ice · synced with the bot</div></div></header>'
+    return '<div class="shell"><header class="top"><div class="snow" aria-hidden="true">❄️</div><div><div class="brand">Miss Fr❄️zen</div><div class="sub">synced with the bot</div></div></header>'
       + inner
       + footer()
       + '</div>';
@@ -136,23 +136,18 @@
 
   function avatarHtml() {
     const photo = tgUser && tgUser.photo_url ? String(tgUser.photo_url).trim() : '';
-    const letter = esc(initial());
-    // photo_url is provided by Telegram when available. Fallback initial always sits under the image.
+    // No profile photo → snowflake fallback (not a letter).
     const img = photo
       ? '<img src="' + esc(photo) + '" alt="" width="76" height="76" decoding="async" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">'
       : '';
-    return '<div class="avatar" role="img" aria-label="' + letter + '">' + img + '<span class="avatar-fallback">' + letter + '</span></div>';
+    return '<div class="avatar" role="img" aria-label="profile">' + img + '<span class="avatar-fallback">❄️</span></div>';
   }
 
   function pageHome() {
-    const id = tgUser && tgUser.id ? String(tgUser.id) : '';
     const name = displayName() || 'Shinobi';
-    const idLine = id
-      ? 'ID <strong>' + esc(id) + '</strong>'
-      : 'Open from Telegram to see your ID';
     return '<section class="hero-card"><div class="identity">'
       + avatarHtml()
-      + '<div><h1 class="who">' + esc(name) + '</h1><p class="id-line">' + idLine + '</p></div>'
+      + '<div><h1 class="who">' + esc(name) + '</h1><p class="id-line">Your shinobi account</p></div>'
       + '</div></section>'
       + (state.error && !state.data ? errorHtml() : '')
       + '<div class="modes">'
@@ -207,31 +202,41 @@
       + card('☑️', 'Create todo', 'Opens the bot and the /todo menu', 'data-start="mini_todo"')
       + card('⏳', 'Set study time target', 'Opens the bot and the /studytime menu', 'data-start="mini_studytime"')
       + card('📝', 'Report', 'Mark a todo or study time complete or not', 'data-page="reports"')
-      + card('🧬', 'Biology tracker', 'Class 11 and 12 study menu', 'data-page="tracker"')
+      + card('🧬', 'Biology tracker', 'Class 11 and 12 study planner', 'data-page="tracker"')
+      + card('🎓', 'Hidden NEET community', 'Groups, library & study material', 'data-page="hnc"')
       + '</div></section>';
   }
 
+
   function pageProfile() {
-    const head = pageHead('Profile', 'Same record as /profile.', 'Game mode');
-    if (!state.profile) {
-      const status = state.profileError
-        ? '<div class="notice error">Profile could not be synced.</div><button class="secondary" data-action="retry">Retry</button>'
-        : loadingHtml('Syncing profile…');
-      return '<section>' + head + status + '</section>';
+    if (state.profileBusy && !state.profile) {
+      return '<section>' + pageHead('Profile', 'Same record as /profile.', 'Game mode') + loadingHtml('Loading profile…') + '</section>';
     }
-    const d = state.profile;
-    const roster = (d.roster || []).length
-      ? d.roster.map((x) => (x.emoji || '🥷') + ' ' + x.name + (x.qty > 1 ? ' ×' + x.qty : '')).join('\n')
-      : '— none yet —';
-    const jutsu = (d.jutsu || []).length ? d.jutsu.join('\n') : '— none —';
-    return '<section>' + head
-      + '<div class="card"><div class="card-title">' + esc(d.displayName || 'Shinobi') + '</div><div class="muted">' + (d.username ? '@' + esc(d.username) : 'No public username') + '</div>'
-      + '<div class="stats">'
+    if (state.profileError && !state.profile) {
+      state.error = state.profileError;
+      return '<section>' + pageHead('Profile', 'Same record as /profile.', 'Game mode') + errorHtml() + '</section>';
+    }
+    const d = state.profile || (state.data && state.data.profile);
+    if (!d) {
+      return '<section>' + pageHead('Profile', 'Same record as /profile.', 'Game mode') + (errorHtml() || loadingHtml()) + '</section>';
+    }
+    const roster = (d.roster || []).map((x) => (typeof x === 'string' ? x : (x.name || x.item_name || ''))).filter(Boolean);
+    const jutsu = (d.jutsu || []).map((x) => (typeof x === 'string' ? x : (x.name || x.item_name || ''))).filter(Boolean);
+    return '<section>' + pageHead('Profile', 'Same record as /profile.', 'Game mode') + errorHtml()
+      + '<div class="hero-card"><div class="identity">' + avatarHtml()
+      + '<div><h1 class="who">' + esc(d.displayName || displayName() || 'Shinobi') + '</h1>'
+      + '<p class="id-line">' + (d.username ? '@' + esc(d.username) : 'No public username') + '</p></div></div></div>'
+      + '<div class="stats-grid">'
       + stat('Rank', d.rank) + stat('XP', d.xpText) + stat('Coins', fmt(d.balance)) + stat('Chakra', fmt(d.chakra))
       + stat('Kills', fmt(d.kills)) + stat('Streak', fmt(d.streak) + '/7') + stat('Last claim', d.lastClaim) + stat('Patrols', fmt(d.narutoPatrols))
-      + '</div><div class="section">Roster</div><div class="plain">' + esc(roster) + '</div>'
-      + '<div class="section">Jutsu</div><div class="plain">' + esc(jutsu) + '</div>'
-      + '<button class="secondary" data-action="retry" style="margin-top:12px">Refresh</button></div></section>';
+      + '</div>'
+      + '<div class="section">Roster</div><div class="chip-row">'
+      + (roster.length ? roster.map((n) => '<span class="chip">🥷 ' + esc(n) + '</span>').join('') : '<span class="muted">Empty</span>')
+      + '</div>'
+      + '<div class="section">Jutsu</div><div class="chip-row">'
+      + (jutsu.length ? jutsu.map((n) => '<span class="chip">✨ ' + esc(n) + '</span>').join('') : '<span class="muted">None yet</span>')
+      + '</div>'
+      + '<button class="secondary" data-action="retry" style="margin-top:14px">Refresh</button></section>';
   }
 
   function stat(label, value) {
@@ -243,17 +248,22 @@
     const inv = state.data.inventory || [];
     const typeOf = (x) => String(x.type || '').toLowerCase();
     const sections = [
-      ['Shinobi', inv.filter((x) => typeOf(x) === 'shinobi' || typeOf(x) === 'character')],
-      ['Jutsu', inv.filter((x) => typeOf(x) === 'jutsu')],
-      ['Gifts', inv.filter((x) => typeOf(x) === 'gift')],
-      ['Chakra', inv.filter((x) => typeOf(x) === 'chakra')],
-      ['Other', inv.filter((x) => !['shinobi', 'character', 'jutsu', 'gift', 'chakra'].includes(typeOf(x)))],
+      ['Shinobi', '🥷', inv.filter((x) => typeOf(x) === 'shinobi' || typeOf(x) === 'character')],
+      ['Jutsu', '✨', inv.filter((x) => typeOf(x) === 'jutsu')],
+      ['Gifts', '🎁', inv.filter((x) => typeOf(x) === 'gift')],
+      ['Chakra', '⚡', inv.filter((x) => typeOf(x) === 'chakra')],
+      ['Other', '📦', inv.filter((x) => !['shinobi', 'character', 'jutsu', 'gift', 'chakra'].includes(typeOf(x)))],
     ];
     return '<section>' + pageHead('Inventory', 'Owned items from the bot.', 'Game mode') + errorHtml()
-      + sections.map(([label, items]) => '<div class="card"><div class="card-title">' + esc(label) + '</div><div class="plain muted">'
-        + (items.length ? items.map((x) => esc(x.name) + (x.qty > 1 ? ' × ' + fmt(x.qty) : '')).join('\n') : '— empty —')
-        + '</div></div>').join('')
-      + '<button class="secondary" data-action="retry" style="margin-top:12px">Refresh</button></section>';
+      + sections.map(([label, emoji, items]) => {
+          if (!items.length && label === 'Other') return '';
+          return '<div class="section">' + esc(label) + '</div><div class="chip-row">'
+            + (items.length
+              ? items.map((x) => '<span class="chip">' + emoji + ' ' + esc(x.name) + (x.qty > 1 ? ' <span class="qty">×' + fmt(x.qty) + '</span>' : '') + '</span>').join('')
+              : '<span class="muted">— empty —</span>')
+            + '</div>';
+        }).join('')
+      + '<button class="secondary" data-action="retry" style="margin-top:14px">Refresh</button></section>';
   }
 
   function pageStore() {
@@ -261,12 +271,27 @@
     const items = state.data.store || [];
     const confirm = state.confirm && items.find((i) => i.name === state.confirm);
     const sheet = confirm
-      ? '<div class="card"><div class="card-title">Buy ' + esc(confirm.emoji || '') + ' ' + esc(confirm.name) + '?</div><p class="muted">' + fmt(confirm.price) + ' coins. Unique items cannot be bought twice.</p><div class="button-row"><button class="primary" data-action="confirm-purchase" ' + (state.busy ? 'disabled' : '') + '>Buy</button><button class="secondary" data-action="cancel-purchase">Cancel</button></div></div>'
+      ? '<div class="card"><div class="card-title">Buy ' + esc(confirm.emoji || '') + ' ' + esc(confirm.name)
+        + (confirm.type === 'chakra' ? ' × ' + fmt(confirm.qty || 100) : '')
+        + '?</div><p class="muted">' + fmt(confirm.price) + ' coins'
+        + (confirm.type === 'chakra' ? '. You can buy again anytime.' : '. Unique items cannot be bought twice.')
+        + '</p><div class="button-row"><button class="primary" data-action="confirm-purchase" ' + (state.busy ? 'disabled' : '') + '>Buy</button><button class="secondary" data-action="cancel-purchase">Cancel</button></div></div>'
       : '';
-    return '<section>' + pageHead('Shinobi store', 'Balance ' + fmt(state.data.profile.balance) + ' coins.', 'Game mode')
+    const rows = items.map((item) => {
+      const isChakra = item.type === 'chakra';
+      const owned = !isChakra && item.owned;
+      const label = isChakra
+        ? (esc(item.emoji || '⚡') + ' Chakra × ' + fmt(item.qty || 100))
+        : (esc(item.emoji || '') + ' ' + esc(item.name));
+      const priceLine = fmt(item.price) + ' coins' + (isChakra ? ' · multi-buy' : '');
+      const btn = owned
+        ? '<button class="buy-btn owned" disabled>Owned</button>'
+        : '<button class="buy-btn" data-confirm-buy="' + esc(item.name) + '" ' + (state.busy ? 'disabled' : '') + '>Buy</button>';
+      return '<div class="store-row"><div class="store-meta"><strong>' + label + '</strong><small>' + priceLine + '</small></div>' + btn + '</div>';
+    }).join('');
+    return '<section>' + pageHead('Shinobi store', 'Shinobi & jutsu are one-time. Chakra can be bought again.', 'Game mode')
       + errorHtml() + sheet
-      + '<div class="list">' + items.map((i) => '<div class="item-row"><div class="item"><span class="item-icon">' + esc(i.emoji || '•') + '</span><span class="item-body"><strong>' + esc(i.name) + '</strong><small>' + fmt(i.price) + ' 🍥 · ' + esc(i.type) + '</small></span></div><button class="buy-btn" data-confirm-buy="' + esc(i.name) + '" ' + (i.owned || state.busy ? 'disabled' : '') + '>' + (i.owned ? 'Owned' : 'Buy') + '</button></div>').join('') + '</div>'
-      + '<div class="notice">Chakra is not sold here. The bot still sells it with /buy in chat.</div></section>';
+      + '<div class="card">' + (rows || '<div class="muted">Store is empty.</div>') + '</div></section>';
   }
 
   function pageAbilities() {
@@ -313,23 +338,33 @@
     const by = Object.fromEntries((study.trackerRows || []).map((r) => [r.chapterId, r]));
     const units = (cls.units || []).map((u) => {
       const chapters = (u.chapters || []).map((c) => {
-        const r = by[c.id];
-        const acts = [['revision', 'Revision', 'revisionDone', 'revisionCount'], ['practice', 'Practice', 'practiceDone', 'practiceCount'], ['pyq', 'PYQ', 'pyqDone', 'pyqCount']];
-        const num = String(c.id).split('_')[1] || '';
-        return '<div class="chapter"><div class="row-between"><div class="chapter-name">' + esc(num) + '. ' + esc(c.name) + '</div><span class="tag">' + esc(trackerStatus(r)) + '</span></div><div class="button-row">'
-          + acts.map(([key, label, done, count]) => {
-            const on = r && r[done];
-            return '<button class="toggle-btn ' + (on ? 'on' : 'off') + '" data-tracker-toggle="1" data-chapter="' + esc(c.id) + '" data-activity="' + key + '" ' + (state.busy ? 'disabled' : '') + '>' + (on ? 'On' : 'Off') + ' ' + label + ' · ×' + fmt(r && r[count]) + '</button>';
-          }).join('')
-          + '</div></div>';
+        const r = by[c.id] || {};
+        const num = String(c.id || '').split('_')[1] || '';
+        const acts = [
+          ['revision', 'Revision', r.revisionCount || 0],
+          ['practice', 'Practice', r.practiceCount || 0],
+          ['pyq', 'PYQ', r.pyqCount || 0],
+        ].map(([key, label, count]) => {
+          const has = count > 0;
+          return '<div class="act-row">'
+            + '<button class="act-btn minus" data-tracker-adjust="1" data-delta="-1" data-chapter="' + esc(c.id) + '" data-activity="' + key + '" ' + (state.busy || count <= 0 ? 'disabled' : '') + '>−</button>'
+            + '<div class="act-label' + (has ? ' has' : '') + '">' + esc(label) + ' · ×' + fmt(count) + '</div>'
+            + '<button class="act-btn plus" data-tracker-adjust="1" data-delta="1" data-chapter="' + esc(c.id) + '" data-activity="' + key + '" ' + (state.busy ? 'disabled' : '') + '>+</button>'
+            + '</div>';
+        }).join('');
+        return '<div class="chapter"><div class="row-between"><div class="chapter-name">' + esc(num) + '. ' + esc(c.name) + '</div><span class="tag">' + esc(trackerStatus(r)) + '</span></div>' + acts + '</div>';
       }).join('');
-      return '<details class="unit" open><summary>' + esc(u.short || u.title) + '</summary>' + chapters + '</details>';
+      return '<details class="unit" open><summary>▼ ' + esc(u.title || u.short || 'Unit') + '</summary>' + chapters + '</details>';
     }).join('');
-    return '<section>' + pageHead('Biology tracker', 'Toggle Revision, Practice and PYQ. Counts stay on the bot.', 'Study mode')
+    return '<section>' + pageHead('Biology tracker', 'Tap +1 for a session, −1 to undo. Counts never go below 0.', 'Study mode')
       + errorHtml()
-      + '<div class="button-row"><button class="' + (state.classKey === '11' ? 'primary' : 'secondary') + '" data-class="11">Class 11</button><button class="' + (state.classKey === '12' ? 'primary' : 'secondary') + '" data-class="12">Class 12</button></div>'
-      + '<div class="notice">🟢 all three done · 🟡 started · 🔴 not started. Turning a task on adds +1, same as /tracker.</div>'
-      + units + '</section>';
+      + '<div class="class-tabs">'
+      + '<button class="' + (state.classKey === '11' ? 'active' : '') + '" data-class="11">Class 11</button>'
+      + '<button class="' + (state.classKey === '12' ? 'active' : '') + '" data-class="12">Class 12</button>'
+      + '</div>'
+      + '<div class="notice">🟢 all three done · 🟡 started · 🔴 not started. Same counts as /tracker.</div>'
+      + units
+      + '</section>';
   }
 
   function pageReports() {
@@ -366,6 +401,48 @@
       + '<button class="secondary" data-action="retry" style="margin-top:10px">Refresh</button></section>';
   }
 
+
+  function pageHnc() {
+    const L = C.LINKS;
+    const groups = [
+      ['📚', 'Study Material', L.studyMaterial, 'Short notes, updates, tricks & PDFs'],
+      ['💬', 'Discussion group', L.discussion, 'Quizzes, doubts & support'],
+      ['🎓', 'NEET Library', L.library, 'Book PDFs — join study channel first'],
+      ['📝', 'To-do sharing', L.todoGroup, 'Share daily todos'],
+      ['📱', 'YPT app group', L.ypt, 'Yeolpumta study app'],
+      ['🗯️', 'Yapping group', L.yapping, 'Off-topic fun'],
+      ['❓', 'NEET Quiz', L.quiz, 'Migrator quizzes'],
+      ['🧠', 'NEET MCQs', L.mcq, 'Conceptual polls'],
+    ];
+    const books = [
+      ['✦ PYQ Books', L.pyq],
+      ['✦ Modules', L.modules],
+      ['✦ Other books', L.otherBooks],
+    ];
+    const notes = [
+      ['11th Bio SN ❄️', L.bio11],
+      ['12th Bio SN ❄️', L.bio12],
+      ['Chemistry SN ❄️', L.chemistry],
+      ['11th Physics SN ❄️', L.physics11],
+      ['12th Physics SN ❄️', L.physics12],
+    ];
+    const open = (url, title, desc, emoji) =>
+      '<a class="link-card" href="' + esc(url) + '" data-url="' + esc(url) + '" target="_blank" rel="noopener">'
+      + '<strong><span class="emoji">' + emoji + '</span>' + esc(title) + '</strong>'
+      + (desc ? '<small>' + esc(desc) + '</small>' : '')
+      + '</a>';
+    return '<section>' + pageHead('Hidden NEET community', 'Same links as /hnc in the bot.', 'Study mode')
+      + errorHtml()
+      + '<div class="notice">Join the <a href="' + esc(L.joinChannel) + '" data-url="' + esc(L.joinChannel) + '" target="_blank" rel="noopener"><strong>Study Material channel</strong></a> first to open library & notes links.</div>'
+      + '<div class="section">Community</div>'
+      + groups.map(([e, t, u, d]) => open(u, t, d, e)).join('')
+      + '<div class="section">Study material · Books</div>'
+      + books.map(([t, u]) => open(u, t, '', '📖')).join('')
+      + '<div class="section">Study material · Short notes</div>'
+      + notes.map(([t, u]) => open(u, t, '', '❄️')).join('')
+      + '</section>';
+  }
+
   const pages = {
     home: pageHome,
     game: pageGame,
@@ -377,6 +454,7 @@
     levels: pageLevels,
     gifts: pageGifts,
     tracker: pageTracker,
+    hnc: pageHnc,
     reports: pageReports,
   };
 
@@ -576,6 +654,14 @@
       const chapterId = button.dataset.chapter;
       if (!C.TRACKER_ACTIVITIES.includes(activity) || !chapterId) return;
       await update({ action: 'tracker_toggle', chapterId, activity });
+      return;
+    }
+    if (button.dataset.trackerAdjust) {
+      const activity = button.dataset.activity;
+      const chapterId = button.dataset.chapter;
+      const delta = Number(button.dataset.delta);
+      if (!C.TRACKER_ACTIVITIES.includes(activity) || !chapterId || (delta !== 1 && delta !== -1)) return;
+      await update({ action: 'tracker_adjust', chapterId, activity, delta });
       return;
     }
     if (button.dataset.todo) {

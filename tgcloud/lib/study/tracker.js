@@ -42,6 +42,33 @@ export async function toggleTracker(uid, chId, act) {
     { ':u': uid, ':c': chId });
 }
 
+/** Mini App: add or remove one session. Count never goes below 0. done flag tracks count > 0. */
+export async function adjustTracker(uid, chId, act, delta) {
+  const a = ACTS[act];
+  if (!a) return;
+  const d = Number(delta);
+  if (d !== 1 && d !== -1) return;
+  if (!(await getRow(uid, chId))) {
+    try { await db.insert(T).values({ userId: uid, chapterId: chId, updatedAt: nowIso() }).run(); }
+    catch (e) { /* concurrent insert */ }
+  }
+  if (d === 1) {
+    await db.run(
+      `UPDATE biology_tracker SET ${a.col}_count = ${a.col}_count + 1, ${a.col}_done = 1, updated_at = :t WHERE user_id = :u AND chapter_id = :c`,
+      { ':t': nowIso(), ':u': uid, ':c': chId });
+  } else {
+    await db.run(
+      `UPDATE biology_tracker SET ${a.col}_count = max(0, ${a.col}_count - 1), ` +
+      `${a.col}_done = CASE WHEN max(0, ${a.col}_count - 1) > 0 THEN 1 ELSE 0 END, ` +
+      `updated_at = :t WHERE user_id = :u AND chapter_id = :c`,
+      { ':t': nowIso(), ':u': uid, ':c': chId });
+  }
+  await db.run(
+    'UPDATE biology_tracker SET xp_cycles_awarded = min(revision_count, practice_count, pyq_count) ' +
+    'WHERE user_id = :u AND chapter_id = :c AND min(revision_count, practice_count, pyq_count) > xp_cycles_awarded',
+    { ':u': uid, ':c': chId });
+}
+
 const nav = (backData, backLabel = '⬅️ Back') => row(
   btn(backLabel, backData),
   btn('❌ Close', 'tracker_close', 'danger'),
