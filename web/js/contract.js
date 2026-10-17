@@ -7,7 +7,7 @@
   // Canonical community URLs from Java tgcloud/lib/hnc.js and universal_buttons.js.
   // The hub's library invite (+lxR4mMxK-1s4MGJl) is older than the bot's current HNC library link.
   const LINKS = {
-    studyMaterial: 'https://t.me/+Dkf7sqGgUWY0MTU1',
+    studyMaterial: 'https://t.me/neet_hideout',
     joinChannel: 'https://t.me/+ULRn7kZy-uFhNzQ1',
     pyq: 'https://t.me/c/4471291233/243',
     modules: 'https://t.me/c/4471291233/152',
@@ -47,6 +47,7 @@
     mini_studytime: '/studytime',
     mini_study: '/study',
     mini_duel: '/duel',
+    mini_map: '/map',
   };
 
   const BOT_USERNAME = 'exfrozen_bot';

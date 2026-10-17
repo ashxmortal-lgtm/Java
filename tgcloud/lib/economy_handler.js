@@ -70,8 +70,10 @@ async function announceDone() {
 // Everything that touches coins, shinobi, inventory or rewards. /start and /help stay open.
 const ECONOMY_CMDS = new Set([
   'balance', 'inventory', 'profile', 'claim', 'daily', 'shinobi_store', 'buy',
-  'mission', 'patrol', 'ability', 'abilities', 'addcoins',
+  'mission', 'patrol', 'map', 'ability', 'abilities', 'addcoins',
   'kill', 'rob', 'protect', 'byakugan', 'mt', 'gift', 'gift_store',
+  'hug', 'slap', 'punch', 'pat',
+  'xoxo', 'rps', 'games', 'xoxo_stats', 'rps_stats',
 ]);
 
 export async function handleEconomyCommand(message, ctx) {

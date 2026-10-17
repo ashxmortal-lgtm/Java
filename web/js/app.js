@@ -128,7 +128,18 @@
   }
 
   function shell(inner) {
-    return '<div class="shell"><header class="top"><div class="snow" aria-hidden="true">❄️</div><div><div class="brand">Miss Fr❄️zen</div><div class="sub">synced with the bot</div></div></header>'
+    const isHome = state.page === 'home';
+    const snow = isHome
+      ? '<div class="snow-layer" aria-hidden="true">' + Array.from({ length: 18 }, (_, i) => {
+          const left = ((i * 37) % 100);
+          const delay = ((i * 0.7) % 8).toFixed(1);
+          const dur = (10 + (i % 6)).toFixed(1);
+          const size = 8 + (i % 5) * 2;
+          return '<span style="left:' + left + '%;animation-delay:' + delay + 's;animation-duration:' + dur + 's;font-size:' + size + 'px">❄</span>';
+        }).join('') + '</div>'
+      : '';
+    return '<div class="shell' + (isHome ? ' shell-home' : '') + '">' + snow
+      + '<header class="top"><div class="snow" aria-hidden="true">❄️</div><div><div class="brand">Miss Fr❄️zen</div><div class="sub">synced with the bot</div></div></header>'
       + inner
       + footer()
       + '</div>';
@@ -192,6 +203,12 @@
       + card('🏯', 'Shinobi store', 'Buy directly. Same catalogue as /buy', 'data-page="store"')
       + card('✨', 'Ability', 'All abilities, with Lvl Up', 'data-page="abilities"')
       + card('🎁', 'Gift store', 'List and prices. Group only', 'data-page="gifts"')
+      + '</div>'
+      + '<div class="map-teaser">'
+      + '<div style="font-size:42px;line-height:1;margin-bottom:6px">🗺️</div>'
+      + '<div style="font-weight:800;margin-bottom:4px">Konoha Map</div>'
+      + '<div class="muted" style="font-size:12px;margin-bottom:10px">Explore Hokage Office, Gate, BBQ and more</div>'
+      + '<button class="primary" data-start="mini_map" style="width:100%">Open Konoha Map</button>'
       + '</div></section>';
   }
 
@@ -407,41 +424,53 @@
     const groups = [
       ['📚', 'Study Material', L.studyMaterial, 'Short notes, updates, tricks & PDFs'],
       ['💬', 'Discussion group', L.discussion, 'Quizzes, doubts & support'],
-      ['🎓', 'NEET Library', L.library, 'Book PDFs — join study channel first'],
+      ['🎓', 'NEET Library', L.library, 'Book PDFs — join channel first'],
       ['📝', 'To-do sharing', L.todoGroup, 'Share daily todos'],
       ['📱', 'YPT app group', L.ypt, 'Yeolpumta study app'],
       ['🗯️', 'Yapping group', L.yapping, 'Off-topic fun'],
       ['❓', 'NEET Quiz', L.quiz, 'Migrator quizzes'],
       ['🧠', 'NEET MCQs', L.mcq, 'Conceptual polls'],
     ];
-    const books = [
-      ['✦ PYQ Books', L.pyq],
-      ['✦ Modules', L.modules],
-      ['✦ Other books', L.otherBooks],
-    ];
-    const notes = [
-      ['11th Bio SN ❄️', L.bio11],
-      ['12th Bio SN ❄️', L.bio12],
-      ['Chemistry SN ❄️', L.chemistry],
-      ['11th Physics SN ❄️', L.physics11],
-      ['12th Physics SN ❄️', L.physics12],
-    ];
     const open = (url, title, desc, emoji) =>
       '<a class="link-card" href="' + esc(url) + '" data-url="' + esc(url) + '" target="_blank" rel="noopener">'
       + '<strong><span class="emoji">' + emoji + '</span>' + esc(title) + '</strong>'
       + (desc ? '<small>' + esc(desc) + '</small>' : '')
       + '</a>';
+    const cell = (url, title, emoji) =>
+      '<a class="link-card" href="' + esc(url) + '" data-url="' + esc(url) + '" target="_blank" rel="noopener">'
+      + '<strong><span class="emoji">' + emoji + '</span>' + esc(title) + '</strong></a>';
     return '<section>' + pageHead('Hidden NEET community', 'Same links as /hnc in the bot.', 'Study mode')
       + errorHtml()
-      + '<div class="notice">Join the <a href="' + esc(L.joinChannel) + '" data-url="' + esc(L.joinChannel) + '" target="_blank" rel="noopener"><strong>Study Material channel</strong></a> first to open library & notes links.</div>'
+      + '<div class="join-banner">'
+      + '<div class="join-title">🔒 Must join Study Material channel first</div>'
+      + '<div class="join-sub">Library and short-notes links stay locked until you join. Tap below to open the channel.</div>'
+      + '<a class="join-btn" href="' + esc(L.joinChannel) + '" data-url="' + esc(L.joinChannel) + '" target="_blank" rel="noopener">Join channel · Hidden NEET library</a>'
+      + '</div>'
       + '<div class="section">Community</div>'
       + groups.map(([e, t, u, d]) => open(u, t, d, e)).join('')
       + '<div class="section">Study material · Books</div>'
-      + books.map(([t, u]) => open(u, t, '', '📖')).join('')
+      + '<div class="link-grid">'
+      + cell(L.pyq, 'PYQ Books', '📖')
+      + cell(L.modules, 'Modules', '📘')
+      + '</div>'
+      + '<div class="link-grid single">'
+      + cell(L.otherBooks, 'Other books', '📚')
+      + '</div>'
       + '<div class="section">Study material · Short notes</div>'
-      + notes.map(([t, u]) => open(u, t, '', '❄️')).join('')
+      + '<div class="link-grid">'
+      + cell(L.bio11, '11th Bio SN ❄️', '❄️')
+      + cell(L.bio12, '12th Bio SN ❄️', '❄️')
+      + '</div>'
+      + '<div class="link-grid single">'
+      + cell(L.chemistry, 'Chemistry SN [11+12] ❄️', '❄️')
+      + '</div>'
+      + '<div class="link-grid">'
+      + cell(L.physics11, '11th Physics SN ❄️', '❄️')
+      + cell(L.physics12, '12th Physics SN ❄️', '❄️')
+      + '</div>'
       + '</section>';
   }
+
 
   const pages = {
     home: pageHome,
