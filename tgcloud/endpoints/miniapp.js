@@ -9,14 +9,14 @@ import {
 import { profileData } from '../lib/profile.js';
 import { claimDaily } from '../lib/economy.js';
 import { DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA, SAKURA_COINS, SAKURA_CHAKRA } from '../lib/economy.js';
-import { ITEMS } from '../lib/store.js';
+import { ITEMS, CHAKRA_RATE, CHAKRA_MIN, findItem } from '../lib/store.js';
 import { purchase } from '../lib/purchase.js';
 import { GIFTS } from '../lib/gift.js';
 import { ROWS as ABILITY_ROWS } from '../lib/ability.js';
 import { levelUpData } from '../lib/levels.js';
 import { pendingRewardTotal } from '../lib/map/pending.js';
 import { getChapter, miniAppTrackerCatalog } from '../lib/study/tracker_data.js';
-import { toggleTracker } from '../lib/study/tracker.js';
+import { toggleTracker, adjustTracker } from '../lib/study/tracker.js';
 import { istNow, nowIso } from '../lib/study/common.js';
 
 const fail = (message, code) => { throw new EndpointError(message, { code }); };
@@ -31,7 +31,7 @@ const ERROR_REPORT_DEDUPE_LIMIT = 100;
 const recentErrorReports = new Map();
 const MINIAPP_ACTIONS = new Set([
   'bootstrap', 'claim', 'purchase', 'todo_update', 'study_report_submit',
-  'study_goal_complete', 'tracker_toggle',
+  'study_goal_complete', 'tracker_toggle', 'tracker_adjust',
 ]);
 
 function sanitizeDiagnosticText(value, user) {
@@ -210,7 +210,10 @@ async function dashboard(user) {
       pendingRewards,
     },
     inventory: owned.map((item) => ({ type: item.itemType, name: item.itemName, qty: item.qty || 1 })),
-    store: ITEMS.map((item) => ({ ...item, owned: ownedByName.has(item.name) })),
+    store: [
+      ...ITEMS.map((item) => ({ ...item, owned: ownedByName.has(item.name) })),
+      { name: 'Chakra', emoji: '⚡', price: CHAKRA_MIN * CHAKRA_RATE, type: 'chakra', qty: CHAKRA_MIN, owned: false },
+    ],
     abilities: ABILITY_ROWS.map(([name, description]) => ({ name, description })),
     levels,
     gifts: GIFTS.map(({ id, emoji, name, price }) => ({ id, emoji, name, price })),
@@ -256,6 +259,22 @@ async function handleMiniApp(input, ctx) {
 
   if (action === 'purchase') {
     const name = String(input?.itemName || '').trim();
+    // Chakra is multi-buy: each tap buys CHAKRA_MIN units at CHAKRA_RATE coins each.
+    if (name.toLowerCase() === 'chakra') {
+      const qty = CHAKRA_MIN;
+      const cost = qty * CHAKRA_RATE;
+      const result = await purchase(user.id, null, {
+        type: 'chakra',
+        name: 'Chakra',
+        qty,
+        cost,
+      });
+      return {
+        purchase: result,
+        item: { name: 'Chakra', emoji: '⚡', type: 'chakra', price: cost, qty },
+        dashboard: await dashboard(user),
+      };
+    }
     const item = ITEMS.find((candidate) => candidate.name === name);
     if (!item) fail('That item is not available in the Shinobi Store.', 'ITEM_NOT_FOUND');
     const result = await purchase(user.id, null, {
@@ -333,6 +352,17 @@ async function handleMiniApp(input, ctx) {
       fail('Choose a valid tracker chapter and activity.', 'INVALID_TRACKER_ACTION');
     }
     await toggleTracker(user.id, chapterId, activity);
+    return { changed: true, dashboard: await dashboard(user) };
+  }
+
+  if (action === 'tracker_adjust') {
+    const chapterId = String(input?.chapterId || '');
+    const activity = String(input?.activity || '');
+    const delta = Number(input?.delta);
+    if (!getChapter(chapterId) || !['revision', 'practice', 'pyq'].includes(activity) || (delta !== 1 && delta !== -1)) {
+      fail('Choose a valid tracker chapter, activity and delta.', 'INVALID_TRACKER_ADJUST');
+    }
+    await adjustTracker(user.id, chapterId, activity, delta);
     return { changed: true, dashboard: await dashboard(user) };
   }
 

@@ -36,6 +36,7 @@
     'study_report_submit',
     'study_goal_complete',
     'tracker_toggle',
+    'tracker_adjust',
   ];
 
   const TRACKER_ACTIVITIES = ['revision', 'practice', 'pyq'];
