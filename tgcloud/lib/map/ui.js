@@ -28,6 +28,7 @@ export function mapKeyboard(userId) {
         btn('🏪 Stores', guard('map_loc_store', userId)),
       ],
       [btn('♨️ Hot Springs', guard('map_loc_hotsprings', userId))],
+      [btn('❌ Close', guard('map_close', userId))],
     ],
   };
 }

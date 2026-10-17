@@ -103,10 +103,13 @@ a { text-decoration: none; }
   flex-shrink: 0;
 }
 .avatar img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+  z-index: 2;
 }
 .avatar-fallback {
   position: absolute;
@@ -115,6 +118,7 @@ a { text-decoration: none; }
   place-items: center;
   font-size: 28px;
   color: var(--accent-glow);
+  z-index: 1;
 }
 .who {
   margin: 0;
@@ -526,3 +530,110 @@ textarea.goal-input:focus {
   font-size: 12px;
 }
 .credit a { color: var(--accent-glow); font-weight: 600; }
+
+/* Slight pop / raised look */
+.mode, .item, .card, .link-card, .hero-card, .stat-tile, .chapter {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32), 0 1px 0 rgba(255,255,255,0.06) inset;
+}
+.mode:active, .item:active, .link-card:active {
+  transform: translateY(1px) scale(0.99);
+}
+.primary, .buy-btn, .claim, .act-btn.plus {
+  box-shadow: 0 6px 16px rgba(40, 120, 180, 0.4), 0 1px 0 rgba(255,255,255,0.12) inset;
+}
+
+/* Home snow */
+.shell-home { position: relative; overflow: hidden; }
+.snow-layer {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+}
+.snow-layer span {
+  position: absolute;
+  top: -12px;
+  color: rgba(200, 230, 255, 0.55);
+  font-size: 10px;
+  animation: snowfall linear infinite;
+  text-shadow: 0 0 6px rgba(180, 220, 255, 0.35);
+}
+.shell-home > header,
+.shell-home > section,
+.shell-home > .modes,
+.shell-home > p.credit { position: relative; z-index: 1; }
+@keyframes snowfall {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 0.7; }
+  90% { opacity: 0.55; }
+  100% { transform: translateY(110vh) translateX(12px); opacity: 0; }
+}
+
+/* Big join notice */
+.join-banner {
+  display: block;
+  padding: 16px 16px 14px;
+  margin: 10px 0 14px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(74, 163, 212, 0.28), rgba(30, 70, 110, 0.55));
+  border: 1px solid rgba(110, 192, 232, 0.45);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  text-align: center;
+}
+.join-banner .join-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #f0f8ff;
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+.join-banner .join-sub {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+.join-banner .join-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 20px;
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 14px;
+  background: linear-gradient(180deg, #4aa3d4, #2f7fb0);
+  color: #f4fbff;
+  box-shadow: 0 6px 16px rgba(40, 120, 180, 0.4);
+  border: 0;
+  width: 100%;
+}
+
+/* Link grid rows for books/notes */
+.link-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.link-grid .link-card { margin-bottom: 0; }
+.link-grid.single { grid-template-columns: 1fr; }
+
+/* Map teaser under gift store */
+.map-teaser {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 24px rgba(0,0,0,0.32);
+  text-align: center;
+}
+.map-teaser img {
+  width: 100%;
+  border-radius: 12px;
+  display: block;
+  margin-bottom: 10px;
+  border: 1px solid var(--line);
+}

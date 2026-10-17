@@ -44,7 +44,7 @@ const NOTE_LINKS = [
   ['12ᴛʜ ᴘʜʏsɪᴄs sɴ ❄️', 'https://t.me/c/2994306672/824'],
 ];
 const GROUP_LINKS = [
-  ['ꜱᴛᴜᴅʏ ᴍᴀᴛᴇʀɪᴀʟ', 'https://t.me/+Dkf7sqGgUWY0MTU1', '📚', 'Short notes, updates, tricks & useful PDFs'],
+  ['ꜱᴛᴜᴅʏ ᴍᴀᴛᴇʀɪᴀʟ', 'https://t.me/neet_hideout', '📚', 'Short notes, updates, tricks & useful PDFs'],
   ['ᴅɪꜱᴄᴜꜱꜱɪᴏɴ ɢʀᴘ', 'https://t.me/+ChxNR6ShlzRjMjA1', '💬', 'Quizzes, doubts & support'],
   ['ɴᴇᴇᴛ ʟɪʙʀᴀʀʏ', 'https://t.me/+ULRn7kZy-uFhNzQ1', '🎓', 'Book PDFs'],
   ['ᴛᴏ-ᴅᴏ ꜱʜᴀʀɪɴɢ ɢʀᴘ', 'https://t.me/+hRDedaMqU2liNmM1', '📝', ''],

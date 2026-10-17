@@ -443,6 +443,17 @@ export async function handleMapCallback(cb) {
       return true;
     }
 
+    if (action === 'map_close') {
+      await answer(cb);
+      try { await api.deleteMessage({ chat_id: chatId, message_id: messageId }); } catch (_) {}
+      // Also delete the map photo panel if this is a rich reply under it.
+      const photoId = user._mapPhotoMessageId;
+      if (photoId && photoId !== messageId) {
+        try { await api.deleteMessage({ chat_id: chatId, message_id: photoId }); } catch (_) {}
+      }
+      return true;
+    }
+
     const locActions = {
       map_loc_hokage: 'hokage',
       map_loc_ichiraku: 'ichiraku',

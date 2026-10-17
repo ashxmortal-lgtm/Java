@@ -3,7 +3,7 @@ import { handleTopicCommand, handleTopicText } from '../lib/topic.js';
 import { api } from '../lib/message_api.js';
 import { buildHncMenu } from '../lib/hnc.js';
 import { handleEconomyCommand } from '../lib/economy_handler.js';
-import { handleGroupAdminCommand } from '../lib/groupadmin.js';
+import { handleGroupAdminCommand, economyLocked, ECO_LOCKED_TEXT } from '../lib/groupadmin.js';
 import { notifyNewUser } from '../lib/ownernotice.js';
 import { handleAnnounceCommand, handleAnnounceText } from '../lib/announce.js';
 import { handleGroupReplyToBot, handleAdminDmReply } from '../lib/replybridge.js';
@@ -27,15 +27,21 @@ const MINI_APP_START_COMMANDS = {
   mini_studytime: '/studytime',
   mini_study: '/study',
   mini_duel: '/duel',
+  mini_map: '/map',
 };
 
 export default async function (message, ctx) {
   // Fixed, whitelisted deep-link payloads let the Mini App launch these commands
   // directly in the bot DM without accepting arbitrary command text from a URL.
   if (message.chat?.type === 'private') {
-    const start = String(message.text || '').trim().match(/^\/start(?:@\w+)?\s+(mini_todo|mini_studytime|mini_study|mini_duel)$/i);
-    const command = start && MINI_APP_START_COMMANDS[start[1].toLowerCase()];
+    const start = String(message.text || '').trim().match(/^\/start(?:@\w+)?\s+(mini_todo|mini_studytime|mini_study|mini_duel|mini_map)$/i);
+    const key = start && start[1].toLowerCase();
+    const command = key && MINI_APP_START_COMMANDS[key];
     if (command) {
+      if (key === 'mini_map') {
+        await handleMapCommand({ ...message, text: '/map' });
+        return;
+      }
       await handleStudyCommand({ ...message, text: command });
       return;
     }
@@ -80,6 +86,29 @@ export default async function (message, ctx) {
   if (await handleAnnounceCommand(message)) return;
   if (await handleOwnerCommand(message)) return;
   if (await handleMtCommand(message)) return;
+
+  // When /eco is off in a group, lock the extra economy-related commands listed by the owner.
+  if (message.chat?.type !== 'private') {
+    const ecoExtra = new Set([
+      'map', 'gift', 'gift_store', 'hug', 'slap', 'punch', 'pat',
+      'xoxo', 'rps', 'games', 'xoxo_stats', 'rps_stats',
+    ]);
+    if (ecoExtra.has(gameCmd)) {
+      let locked = false;
+      try { locked = await economyLocked(message.chat.id); } catch (_) {}
+      if (locked) {
+        try {
+          await api.sendMessage({
+            chat_id: message.chat.id,
+            text: ECO_LOCKED_TEXT,
+            reply_parameters: { message_id: message.message_id },
+          });
+        } catch (_) {}
+        return;
+      }
+    }
+  }
+
   if (await handleGiftCommand(message)) return;
   if (await handleSocialCommand(message)) return;
 
