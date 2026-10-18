@@ -11,11 +11,12 @@ import { users, inventory } from '../schema.js';
 import { style, escapeHtml } from './texts.js';
 import { fmt } from './store.js';
 import { table } from './rich.js';
-import { collectStatus, statusText, extrasLines, fullName } from './rpg/status.js';
+import { collectStatus, statusParts } from './rpg/status.js';
+import { sakuraHeal, katsuyuHeal, restorableTimers, katsuyuRestore } from './rpg/training.js';
 import { dueText } from './rpg/time.js';
 
 const para = (...t) => ({ type: 'paragraph', text: t.length === 1 ? t[0] : t });
-const head = (text) => ({ type: 'heading', text, size: 2 });
+const head = (text, size = 2) => ({ type: 'heading', text, size });
 const row = (...buttons) => ({ type: 'buttons', buttons, align: 'center' });
 const cb = (text, data, style) => (style ? { text, callback_data: data, style } : { text, callback_data: data });
 const rich = (blocks) => ({ blocks });
@@ -42,11 +43,10 @@ function isJutsu(item) {
 
 function isShinobi(item) {
   const t = String(item.itemType || '').toLowerCase();
+  if (t === 'chakra') return false;
+  if (String(item.itemName || '').toLowerCase() === 'chakra') return false;
   if (t === 'shinobi' || t === 'character') return true;
-  if (isJutsu(item)) return false;
-  if (t === 'gift') return false;
-  // default non-gift non-jutsu counts as shinobi/item on main screen
-  return t !== 'gift';
+  return false;
 }
 
 function quoteLines(lines) {
@@ -75,22 +75,14 @@ export async function buildInventoryBlocks(user) {
   if (shinobi.length) {
     const status = await collectStatus(uid);
     const byName = Object.fromEntries(status.rows.map((r) => [r.name, r]));
-    const tableRows = [['Shinobi', 'Status']];
-    const details = [];
+    const tableRows = [['Name', 'Status', 'Returns']];
     for (const s of shinobi) {
-      const r = byName[s.itemName];
-      const nm = `${escapeHtml(fullName(s.itemName))} · Lv. ${r ? r.level : 1}`;
-      tableRows.push([nm, r ? statusText(r) : '🟢 Ready']);
-      for (const ex of r ? extrasLines(r) : []) details.push(`· ${ex}`);
+      const part = byName[s.itemName]
+        ? statusParts(byName[s.itemName])
+        : { name: s.itemName, status: 'ready', returns: '—' };
+      tableRows.push([part.name, part.status, part.returns]);
     }
     blocks.push(table(tableRows));
-    // Protection applies to the whole roster — one shared detail line.
-    if (status.skills && (status.skills.protectedUntil || 0) > status.now) {
-      details.push(`· 🛡️ Jiraiya protection until ${dueText(status.skills.protectedUntil, status.now)}`);
-    }
-    if (details.length) {
-      blocks.push(quoteLines(details.slice(0, 12)));
-    }
   } else {
     blocks.push(quoteLines(['❯ (no shinobi yet — recruit at /shinobi_store)']));
   }
@@ -98,6 +90,10 @@ export async function buildInventoryBlocks(user) {
   blocks.push(para(`⚡ CHAKRA: ${Number(chakra).toLocaleString('en-US')}`));
   blocks.push(para(`🍥 BALANCE: ${Number(balance).toLocaleString('en-US')}`));
   blocks.push(para(style('❄️ Your shinobi are making progress! Return when their timers finish and continue your journey.')));
+  blocks.push(row(
+    cb("🌸 Sakura's Healing", 'inv:sakura', 'success'),
+    cb("🐌 Katsuyu's Healing", 'inv:katsuyu', 'primary'),
+  ));
   blocks.push(row(cb('🌀 Jutsu', 'inv:jutsu', 'primary')));
   return blocks;
 }
@@ -152,12 +148,114 @@ export async function sendInventory(chatId, user) {
   }
 }
 
+function sakuraAlert(r) {
+  if (r.code === 'ok') {
+    return r.katsuyuUnlocked
+      ? "Sakura revived. Katsuyu's Healing is unlocked."
+      : 'Sakura revived.';
+  }
+  if (r.code === 'locked') return `Sakura's Healing unlocks at Lv. 4 (now Lv. ${r.level}).`;
+  if (r.code === 'cooldown') return `On cooldown until ${dueText(r.until)}.`;
+  if (r.code === 'not_dead') return 'Sakura is not dead.';
+  if (r.code === 'not_owned') return 'Sakura is not on your roster.';
+  return 'Could not use Sakura\'s Healing.';
+}
+
+function katsuyuAlert(r) {
+  if (r.code === 'ok') {
+    const revived = r.revived ? ` Revived ${r.revived}.` : '';
+    return `+${r.chakra} chakra.${revived}`;
+  }
+  if (r.code === 'locked') return "Katsuyu's Healing unlocks after 3 Sakura heals.";
+  if (r.code === 'cooldown') return `On cooldown until ${dueText(r.until)}.`;
+  return "Could not use Katsuyu's Healing.";
+}
+
+async function buildRestoreBlocks(user, result, timers) {
+  const lines = [`+${result.chakra} chakra added.`];
+  if (result.revived) lines.push(`${result.revived} revived with 24h protection.`);
+  lines.push('Choose one timer to restore:');
+  const buttons = timers.map((t) => cb(
+    `${t.kind === 'exhaustion' ? '🔥' : '⏳'} ${t.shinobi}`,
+    `inv:kr:${t.kind}:${t.shinobi}:${result.healKey}`,
+    'primary',
+  ));
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  return [
+    para(mention(user), "'s HEALING"),
+    head("🐌 KATSUYU'S HEALING", 6),
+    quoteLines(lines),
+    ...rows,
+    row(cb('Back', 'inv:home', 'danger')),
+  ];
+}
+
 export async function handleInventoryCallback(cq) {
   const data = cq.data || '';
   if (!data.startsWith('inv:')) return false;
-  await api.answerCallbackQuery({ callback_query_id: cq.id });
-  if (!cq.message) return true;
+  if (!cq.message) {
+    await api.answerCallbackQuery({ callback_query_id: cq.id });
+    return true;
+  }
+
   try {
+    if (data === 'inv:sakura') {
+      const r = await sakuraHeal(cq.from.id);
+      await api.answerCallbackQuery({
+        callback_query_id: cq.id, text: sakuraAlert(r), show_alert: true,
+      });
+      const blocks = await buildInventoryBlocks(cq.from);
+      await api.editMessageText({
+        chat_id: cq.message.chat.id,
+        message_id: cq.message.message_id,
+        rich_message: rich(blocks),
+      });
+      return true;
+    }
+
+    if (data === 'inv:katsuyu') {
+      const r = await katsuyuHeal(cq.from.id);
+      if (r.code !== 'ok') {
+        await api.answerCallbackQuery({
+          callback_query_id: cq.id, text: katsuyuAlert(r), show_alert: true,
+        });
+        return true;
+      }
+      const timers = await restorableTimers(cq.from.id);
+      await api.answerCallbackQuery({
+        callback_query_id: cq.id, text: katsuyuAlert(r), show_alert: true,
+      });
+      const blocks = timers.length
+        ? await buildRestoreBlocks(cq.from, r, timers)
+        : await buildInventoryBlocks(cq.from);
+      await api.editMessageText({
+        chat_id: cq.message.chat.id,
+        message_id: cq.message.message_id,
+        rich_message: rich(blocks),
+      });
+      return true;
+    }
+
+    if (data.startsWith('inv:kr:')) {
+      const [, , kind, shinobi, healKey] = data.split(':');
+      const r = await katsuyuRestore(cq.from.id, kind, shinobi, healKey);
+      const text = r.code === 'ok'
+        ? `${shinobi} ${kind === 'exhaustion' ? 'exhaustion' : 'cooldown'} cleared.`
+        : r.code === 'duplicate'
+          ? 'This heal already restored a timer.'
+          : 'That timer is already gone.';
+      await api.answerCallbackQuery({ callback_query_id: cq.id, text, show_alert: true });
+      const blocks = await buildInventoryBlocks(cq.from);
+      await api.editMessageText({
+        chat_id: cq.message.chat.id,
+        message_id: cq.message.message_id,
+        rich_message: rich(blocks),
+      });
+      return true;
+    }
+
+    await api.answerCallbackQuery({ callback_query_id: cq.id });
     const blocks = data === 'inv:jutsu'
       ? await buildJutsuBlocks(cq.from)
       : await buildInventoryBlocks(cq.from);
@@ -168,6 +266,7 @@ export async function handleInventoryCallback(cq) {
     });
   } catch (e) {
     console.error('inv callback failed:', e?.description || e);
+    try { await api.answerCallbackQuery({ callback_query_id: cq.id, text: 'Could not use that.', show_alert: true }); } catch (_) {}
   }
   return true;
 }

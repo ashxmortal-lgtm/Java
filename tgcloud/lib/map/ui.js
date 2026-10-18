@@ -93,8 +93,6 @@ export function trainingKeyboard(userId) {
     inline_keyboard: [
       [btn('🌸 Sakura Training (Tsunade)', guard('map_train_sakura', userId))],
       [btn('🍥 Naruto Training (Jiraiya)', guard('map_train_naruto', userId))],
-      [btn('🌸 Sakura\'s Healing', guard('map_sk_heal_view', userId))],
-      [btn('🐌 Katsuyu\'s Healing', guard('map_kat', userId))],
       backToMapRow(userId),
     ],
   };

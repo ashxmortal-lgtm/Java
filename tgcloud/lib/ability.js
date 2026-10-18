@@ -1,7 +1,5 @@
 import { style, mention } from './texts.js';
 
-const q = (s) => `<blockquote>${s}</blockquote>`;
-
 export const ROWS = [
   ['⚔️ Sasuke', 'adventurer · /mission → 🍥 300'],
   ['🌸 Sakura', 'booster · /claim bonus grows with level · patrol only (no missions) · healing at Lv. 4'],
@@ -14,28 +12,26 @@ export const ROWS = [
   ['👤 Profile', '/profile → rank, XP, roster & stats'],
 ];
 
-// Rich message (HTML table). Styled font, mention on top.
+const ABILITY_URL = 'https://t.me/frozenblooded/27';
+
 export function abilityHtml(user) {
-  const rows = ROWS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('');
+  const who = user ? `<p>${mention(user)}</p>` : '';
   return style(
-    `<p>${mention(user)}</p>` +
-    `<p>📖 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐀𝐁𝐈𝐋𝐈𝐓𝐈𝐄𝐒</p>` +
-    `<table><tr><th>Shinobi</th><th>Ability</th></tr>${rows}</table>` +
-    `<p></p>`,
+    `${who}<p>Clicked on button below to check abilities of all shinobis.</p>` +
+    `<tg-button-row align="center"><tg-button type="url" url="${ABILITY_URL}" style="success">Check ❄️ abilities</tg-button></tg-button-row>`,
   );
 }
 
-// Classic fallback (no mention; the caller adds it).
 export function abilityText() {
-  return [
-    `📖 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐀𝐁𝐈𝐋𝐈𝐓𝐈𝐄𝐒`,
-    ...ROWS.map(([a, b]) => q(`${a}\n${b}`)),
-    ``,
-  ].join('\n\n');
+  return 'Clicked on button below to check abilities of all shinobis.';
 }
 
-export const abilityKeyboard = (id) => ({
-  inline_keyboard: [[{ text: style('Lvl Up'), callback_data: `lv:up:${id}` }]],
+export const abilityKeyboard = () => ({
+  inline_keyboard: [[{
+    text: 'Check ❄️ abilities',
+    url: ABILITY_URL,
+    style: 'success',
+  }]],
 });
 export const backKeyboard = (id) => ({
   inline_keyboard: [[{ text: style('Back'), callback_data: `lv:ab:${id}` }]],

@@ -4,7 +4,6 @@ import { sql } from 'sdk/db';
 import { api } from './message_api.js';
 import { style, escapeHtml } from './texts.js';
 import { SHINOBI, JUTSU, CHAKRA_RATE, boldNum, fmt } from './store.js';
-import { ROWS } from './ability.js';
 import { OWNER_ID } from './admin.js';
 import { send, sendRich } from './chat.js';
 import { ownedSet, getEquipped, getAllShinobiState } from './rpg/state.js';
@@ -151,12 +150,16 @@ function jutsuQuote() {
   return quote(JUTSU.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
 }
 
-export function abilityContent(ownerId) {
+export function abilityContent(_ownerId, opts = {}) {
+  const buttons = [
+    row(btn('Check ❄️ abilities', { url: 'https://t.me/frozenblooded/27', style: 'success' })),
+  ];
+  if (opts.fromMap) {
+    buttons.push(row(btn('Back', { callback_data: `map_home:${_ownerId}`, style: 'danger' })));
+  }
   return [
-    P('📖 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐀𝐁𝐈𝐋𝐈𝐓𝐈𝐄𝐒'),
-    table([['Shinobi', 'Ability'], ...ROWS]),
-    P('─────────────────⟢'),
-    row(btn('Lvl Up', { callback_data: `lv:up:${ownerId}` })),
+    P('Clicked on button below to check abilities of all shinobis.'),
+    ...buttons,
   ];
 }
 

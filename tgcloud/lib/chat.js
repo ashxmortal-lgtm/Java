@@ -21,7 +21,13 @@ async function remember(chatId, sent) {
   } catch (e) { console.error(e); }
 }
 
-// Classic HTML text -> rich HTML (one <p> per line, quotes kept).
+function deliveryExtra(params) {
+  const extra = {};
+  if (params.reply_parameters) extra.reply_parameters = params.reply_parameters;
+  if (params.message_thread_id) extra.message_thread_id = params.message_thread_id;
+  if (params.ephemeral_message_parameters) extra.ephemeral_message_parameters = params.ephemeral_message_parameters;
+  return extra;
+}
 function toRichHtml(text) {
   const para = (s) => s.split('\n').map((l) => l.trim()).filter(Boolean)
     .map((l) => `<p>${l}</p>`).join('');
@@ -37,7 +43,7 @@ export async function send(chatId, params) {
   let sent;
   if (params.parse_mode === 'HTML' && params.text && !params.reply_markup) {
     try {
-      const extra = params.reply_parameters ? { reply_parameters: params.reply_parameters } : {};
+      const extra = deliveryExtra(params);
       sent = await api.sendRichMessage({
         chat_id: chatId, rich_message: { html: toRichHtml(params.text) }, ...extra,
       });
@@ -52,7 +58,8 @@ export async function send(chatId, params) {
 }
 
 export async function sendRich(chatId, params) {
-  const sent = await api.sendRichMessage({ chat_id: chatId, ...params });
+  const extra = deliveryExtra(params);
+  const sent = await api.sendRichMessage({ chat_id: chatId, ...extra, ...params });
   await remember(chatId, sent);
   return sent;
 }

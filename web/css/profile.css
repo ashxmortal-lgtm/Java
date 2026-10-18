@@ -7,3 +7,6 @@
 .profile-eyebrow { font-size: 11px; letter-spacing: 0.12em; font-weight: 700; color: var(--muted); text-transform: uppercase; }
 .profile-content { margin-top: 8px; }
 .profile-retry { margin-top: 10px; }
+
+.profile-identity { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.profile-identity .profile-name { font-size: 22px; font-weight: 800; }

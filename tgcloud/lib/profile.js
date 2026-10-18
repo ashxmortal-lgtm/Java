@@ -6,6 +6,9 @@ import { sql } from 'sdk/db';
 import { fmt } from './store.js';
 import { mention, style } from './texts.js';
 import { rankOf } from './activities.js';
+import { botAvatarDataUri } from './bot_avatar.js';
+import { getEquipped, getShinobiState, isDead } from './rpg/state.js';
+import { dueText } from './rpg/time.js';
 
 const EMO = {
   Sasuke: '⚔️',
@@ -71,7 +74,22 @@ export async function profileData(user) {
     ? `${fmt(xp)} / ${fmt(nextXp)} XP → ${nextLabel}`
     : `${fmt(xp)} XP (Kage)`;
 
+  // Life status of the equipped shinobi (shown under the name in the Mini App).
+  let life = { alive: true, label: 'Alive', equipped: 'Starter Shinobi' };
+  try {
+    const equipped = await getEquipped(id);
+    const st = await getShinobiState(id, equipped);
+    const t = Math.floor(Date.now() / 1000);
+    life = isDead(st, t)
+      ? { alive: false, label: `Dead · revives ${dueText(st.deadUntil, t)}`, equipped }
+      : { alive: true, label: 'Alive', equipped };
+  } catch (_) { /* keep default */ }
+  let botAvatar = '';
+  try { botAvatar = await botAvatarDataUri(); } catch (_) { /* optional */ }
+
   return {
+    life,
+    botAvatar,
     displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Shinobi',
     username: user.username || '',
     rank: rank[1],

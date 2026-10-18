@@ -108,8 +108,38 @@ export async function collectStatus(telegramId) {
   return { rows, skills, search, now: t };
 }
 
-/** Short detail lines for a status row (extras + protection note). */
-export function extrasLines(row) {
+/** Short cells for the rich status table: name, status, return time. */
+export function statusParts(row) {
+  const p = row.primary || {};
+  const statusByKey = {
+    patrol: 'patrol',
+    mission: 'mission',
+    exhausted: 'exhausted',
+    searching: 'searching',
+    bbq: 'chilling in BBQ',
+    training: 'resting in Training Ground',
+    dead: 'dead',
+    ready: 'ready',
+  };
+  return {
+    name: row.name,
+    status: statusByKey[p.key] || String(p.label || 'ready').toLowerCase(),
+    returns: p.due || '—',
+  };
+}
+
+/** Compact bordered HTML table used by the Gate. */
+export function statusTableHtml(rows) {
+  if (!rows || !rows.length) return '<p>No shinobi owned yet. Recruit at Stores.</p>';
+  const body = rows.map((row) => {
+    const s = statusParts(row);
+    return `<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.status)}</td><td>${escapeHtml(s.returns)}</td></tr>`;
+  }).join('');
+  return `<table><tr><th>Name</th><th>Status</th><th>Returns</th></tr>${body}</table>`;
+}
+
+/** Extra live timers for a roster row (never hidden). */
+export function statusExtras(row) {
   return row.extras || [];
 }
 

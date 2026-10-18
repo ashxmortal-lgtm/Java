@@ -120,6 +120,14 @@ a { text-decoration: none; }
   color: var(--accent-glow);
   z-index: 1;
 }
+.life {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.life.alive { color: var(--good); }
+.life.dead { color: var(--danger-ink); }
 .who {
   margin: 0;
   font-size: 22px;
@@ -542,33 +550,8 @@ textarea.goal-input:focus {
   box-shadow: 0 6px 16px rgba(40, 120, 180, 0.4), 0 1px 0 rgba(255,255,255,0.12) inset;
 }
 
-/* Home snow */
-.shell-home { position: relative; overflow: hidden; }
-.snow-layer {
-  pointer-events: none;
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  z-index: 0;
-}
-.snow-layer span {
-  position: absolute;
-  top: -12px;
-  color: rgba(200, 230, 255, 0.55);
-  font-size: 10px;
-  animation: snowfall linear infinite;
-  text-shadow: 0 0 6px rgba(180, 220, 255, 0.35);
-}
-.shell-home > header,
-.shell-home > section,
-.shell-home > .modes,
-.shell-home > p.credit { position: relative; z-index: 1; }
-@keyframes snowfall {
-  0% { transform: translateY(0) translateX(0); opacity: 0; }
-  10% { opacity: 0.7; }
-  90% { opacity: 0.55; }
-  100% { transform: translateY(110vh) translateX(12px); opacity: 0; }
-}
+/* Ambient snow canvas is injected by js/snow.js (fixed, z-index 0). */
+#app, .shell, .profile-shell { position: relative; z-index: 1; }
 
 /* Big join notice */
 .join-banner {

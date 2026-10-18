@@ -34,7 +34,7 @@ import {
   listExhausted,
   healExhaustedAtBbq,
 } from './bbq.js';
-import { collectStatus, gateLine, extrasLines } from '../rpg/status.js';
+import { collectStatus, statusTableHtml } from '../rpg/status.js';
 import { dueText } from '../rpg/time.js';
 import {
   trainSession,
@@ -182,30 +182,12 @@ async function showScreen(chatId, panelMessageId, user, bodyInner, keyboard, loc
 
 const now = () => Math.floor(Date.now() / 1000);
 
-/** Status line for each owned shinobi at the Gate (exact IST return times). */
-async function gateRosterLines(telegramId) {
-  // Refresh first: pay out any finished activities so nothing shows stale.
-  try {
-    await settleOwn({ id: telegramId });
-  } catch (e) {
-    console.error('[gate settle]', e);
-  }
-  const status = await collectStatus(telegramId);
-  if (!status.rows.length) return ['No shinobi owned yet. Recruit at Stores.'];
-  const lines = status.rows.map(gateLine);
-  for (const r of status.rows) {
-    for (const ex of extrasLines(r)) lines.push(`<i>${escapeHtml(ex)}</i>`);
-  }
-  if (status.skills && (status.skills.protectedUntil || 0) > status.now) {
-    lines.push(`<i>🛡️ Jiraiya protection until ${dueText(status.skills.protectedUntil, status.now)}</i>`);
-  }
-  return lines;
-}
-
+/** Minimal rich table: name, status, return time. */
 async function gateBody(telegramId) {
   try {
-    const lines = await gateRosterLines(telegramId);
-    return locBody('🚪 VILLAGE GATE', ['Your shinobi:', ...lines]);
+    try { await settleOwn({ id: telegramId }); } catch (e) { console.error('[gate settle]', e); }
+    const status = await collectStatus(telegramId);
+    return `<p><b>🚪 VILLAGE GATE</b></p>${statusTableHtml(status.rows)}`;
   } catch (e) {
     console.error('[gateBody]', e);
     return locBody('🚪 VILLAGE GATE', [
