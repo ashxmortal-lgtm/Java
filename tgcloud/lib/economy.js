@@ -1,6 +1,7 @@
 import { db } from 'sdk';
 import { eq, sql } from 'sdk/db';
 import { users } from '../schema.js';
+import { sakuraClaimBonus } from './rpg/levels.js';
 
 export const DAILY_COINS = 500;
 export const DAILY_CHAKRA = 100;
@@ -37,9 +38,18 @@ export async function claimDaily(id) {
   const streak = d === yesterday ? (s % 7) + 1 : 1;
   const bonus = streak === 7;
   const sak = await db.get(sql`SELECT 1 AS x FROM inventory WHERE telegram_id = ${id} AND item_name = 'Sakura'`);
-  const sakura = !!sak;
-  const coins = DAILY_COINS + (bonus ? BONUS_COINS : 0) + (sakura ? SAKURA_COINS : 0);
-  const chakra = DAILY_CHAKRA + (bonus ? BONUS_CHAKRA : 0) + (sakura ? SAKURA_CHAKRA : 0);
+  let sakura = !!sak;
+  // Sakura's Boost scales with her level (from Tsunade training).
+  let sakuraCoins = 0;
+  let sakuraChakra = 0;
+  if (sakura) {
+    const lv = await db.get(sql`SELECT level FROM shinobi_state WHERE telegram_id = ${id} AND shinobi = 'Sakura'`);
+    const b = sakuraClaimBonus(lv ? lv.level : 1);
+    sakuraCoins = b.coins;
+    sakuraChakra = b.chakra;
+  }
+  const coins = DAILY_COINS + (bonus ? BONUS_COINS : 0) + sakuraCoins;
+  const chakra = DAILY_CHAKRA + (bonus ? BONUS_CHAKRA : 0) + sakuraChakra;
 
   // One guarded statement: only the first request of the day pays.
   const res = await db.run(sql`UPDATE users SET balance = balance + ${coins}, last_claim_date = ${today}, claim_streak = ${streak} WHERE telegram_id = ${id} AND (last_claim_date IS NULL OR last_claim_date != ${today})`);
@@ -58,5 +68,5 @@ export async function claimDaily(id) {
       chakraFailed = true;
     }
   }
-  return { claimed: true, streak, bonus, sakura, coins, chakra, chakraFailed, balance: await getBalance(id) };
+  return { claimed: true, streak, bonus, sakura, sakuraCoins, sakuraChakra, coins, chakra, chakraFailed, balance: await getBalance(id) };
 }

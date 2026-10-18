@@ -68,3 +68,5 @@ export const FIELD_MEAL_MENU = {
 export const BBQ_RECOVERY_INTERVAL_SEC = 30 * 60;
 export const BBQ_RECOVERY_AMOUNT = 20;
 export const MAX_CHAKRA = 100;
+// Instant exhaustion recovery price at the BBQ, per shinobi who needs it.
+export const BBQ_HEAL_COST = 200;

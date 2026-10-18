@@ -1,10 +1,13 @@
 import { BotApiError } from 'sdk';
+import { db } from 'sdk';
+import { sql } from 'sdk/db';
 import { api } from './message_api.js';
 import { style, escapeHtml } from './texts.js';
-import { SHINOBI, JUTSU, CHAKRA_RATE, boldNum } from './store.js';
+import { SHINOBI, JUTSU, CHAKRA_RATE, boldNum, fmt } from './store.js';
 import { ROWS } from './ability.js';
 import { OWNER_ID } from './admin.js';
 import { send, sendRich } from './chat.js';
+import { ownedSet, getEquipped, getAllShinobiState } from './rpg/state.js';
 
 // ---- block shapes (the only place to fix if Telegram rejects one) ----
 const S = (t) => style(t);
@@ -72,12 +75,25 @@ const footer = () => [
   P('tap an item name to copy it.'),
 ];
 
-export function storeContent(screen, ownerId) {
+// Short skill notes — only skills already defined in the game.
+const SKILL_NOTES = {
+  Sasuke: 'mission specialist',
+  Sakura: 'boost on /claim · patrol only · healing at Lv. 4',
+  Naruto: '×3 patrol/mission rewards · shadow clone',
+  Itachi: 'kill & rob · cannot patrol/mission',
+  Hinata: '/byakugan — reveals protection time',
+};
+
+/**
+ * Shinobi Store with live balance, ownership markers, levels and
+ * Buy / Owned / Equip buttons. Async — callers must await it.
+ */
+export async function storeContent(screen, ownerId) {
   const cb = (s) => ({ callback_data: `store:${s}:${ownerId}` });
-  const shinobiQuote = quote(SHINOBI.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
-  const jutsuQuote = quote(JUTSU.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
   if (screen === 'jutsu') {
-    return [P('🌀 𝐉𝐔𝐓𝐒𝐔'), jutsuQuote, ...footer(), row(btn('Back', cb('main')))];
+    return [
+      P('🌀 𝐉𝐔𝐓𝐒𝐔'), jutsuQuote(), ...footer(), row(btn('Back', cb('main'))),
+    ];
   }
   if (screen === 'chakra') {
     return [
@@ -86,14 +102,53 @@ export function storeContent(screen, ownerId) {
       ...footer(), row(btn('Back', cb('main'))),
     ];
   }
+
+  const balRow = await db.get(sql`SELECT balance FROM users WHERE telegram_id = ${ownerId}`);
+  const balance = balRow ? balRow.balance : 0;
+  const own = await ownedSet(ownerId);
+  const equipped = await getEquipped(ownerId);
+  const states = await getAllShinobiState(ownerId);
+
+  const lines = [];
+  const buttons = [];
+  for (const i of SHINOBI) {
+    const isOwned = own.has(i.name);
+    const isEquipped = equipped === i.name;
+    const lv = (states[i.name] && states[i.name].level) || 1;
+    lines.push(
+      `✦ <b>${escapeHtml(i.name)}</b> ${i.emoji} : ${boldNum(i.price)} 🍥`
+      + ` · Lv. ${lv}`
+      + (isEquipped ? ' · 👤 equipped' : isOwned ? ' · ✅ owned' : ''),
+    );
+    if (SKILL_NOTES[i.name]) lines.push(`   <i>${escapeHtml(SKILL_NOTES[i.name])}</i>`);
+    const rowBtns = [];
+    if (!isOwned) {
+      rowBtns.push(btn(`Buy ${i.name} (${boldNum(i.price)} 🍥)`, { callback_data: `sb:${i.name}:${ownerId}` }));
+    } else if (!isEquipped) {
+      rowBtns.push(btn(`Equip ${i.name}`, { callback_data: `seq:${i.name}:${ownerId}` }));
+    } else {
+      rowBtns.push(btn(`Equipped ✓`, { callback_data: `seq:${i.name}:${ownerId}` }));
+    }
+    buttons.push(rowBtns);
+  }
+
   return [
     P('🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄'),
     P('ʀᴇᴄʀᴜɪᴛ ʏᴏᴜʀ ɴᴇxᴛ ꜱʜɪɴᴏʙɪ'),
+    P(`🍥 Balance: ${fmt(balance)}`),
     P('⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈'),
-    shinobiQuote,
+    quote(lines.join('\n')),
+    ...buttons.map((b) => row(...b)),
     ...footer(),
     row(btn('Jutsu', cb('jutsu')), btn('Chakra', cb('chakra'))),
   ];
+}
+
+function shinobiQuote() {
+  return quote(SHINOBI.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
+}
+function jutsuQuote() {
+  return quote(JUTSU.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
 }
 
 export function abilityContent(ownerId) {

@@ -10,6 +10,8 @@ export const users = table('users', {
   kills: integer('kills').notNull().default(0),
   narutoPatrols: integer('naruto_patrols').notNull().default(0),
   claimStreak: integer('claim_streak').notNull().default(0),
+  // Equipped shinobi (item_name from inventory). null = Starter Shinobi default.
+  equipped: text('equipped'),
   // 1 = user blocked the bot (set via my_chat_member); cleared on /start
   blocked: integer('blocked').notNull().default(0),
 }, (t) => ({
@@ -455,6 +457,84 @@ export const supportConversations = table('support_conversations', {
 }, (t) => ({
   thread: uniqueIndex('uidx_support_conversations_thread').on(t.threadId),
 }));
+
+// ---- Frozen Blooded shinobi RPG state (all additive; unix-epoch seconds) ----
+
+/** Per-shinobi persistent state: level, exhaustion, death, robbery, training. */
+export const shinobiState = table('shinobi_state', {
+  telegramId: integer('telegram_id').notNull(),
+  shinobi: text('shinobi').notNull(),
+  level: integer('level').notNull().default(1),
+  // Consecutive completed patrols since the last exhaustion reset.
+  patrolStreak: integer('patrol_streak').notNull().default(0),
+  // Shinobi is exhausted until this timestamp (0 = not exhausted).
+  exhaustedUntil: integer('exhausted_until').notNull().default(0),
+  // Shinobi is dead until this timestamp (0 = alive). Revival is automatic.
+  deadUntil: integer('dead_until').notNull().default(0),
+  // Target's equipped shinobi was robbed at this timestamp (24h robbery lockout).
+  lastRobbedAt: integer('last_robbed_at').notNull().default(0),
+  // Training Ground progress (sessions completed for this shinobi).
+  trainSessions: integer('train_sessions').notNull().default(0),
+  // Next time a training session may start (one per day).
+  nextTrainAt: integer('next_train_at').notNull().default(0),
+}, (t) => ({
+  ownerShinobi: uniqueIndex('uidx_shinobi_state').on(t.telegramId, t.shinobi),
+}));
+
+/** Per-user skill state: protection, healing cooldowns and use counts, byakugan. */
+export const userSkills = table('user_skills', {
+  telegramId: integer('telegram_id').primaryKey(),
+  // Jiraiya /protect — user immunity until this timestamp.
+  protectedUntil: integer('protected_until').notNull().default(0),
+  // Sakura's Healing: last successful use (24h cooldown) and total successful uses.
+  sakuraHealAt: integer('sakura_heal_at').notNull().default(0),
+  sakuraHealUses: integer('sakura_heal_uses').notNull().default(0),
+  // Katsuyu's Healing: 24h skill cooldown.
+  katsuyuHealAt: integer('katsuyu_heal_at').notNull().default(0),
+  // Hinata /byakugan: last successful use (24h cooldown).
+  byakuganAt: integer('byakugan_at').notNull().default(0),
+}, (t) => ({}));
+
+/** Hidden Tsunade search sessions (one active or outstanding row per user). */
+export const tsunadeSearch = table('tsunade_search', {
+  telegramId: integer('telegram_id').primaryKey(),
+  // 'active' = session running; 'done' = session finished and result shown.
+  status: text('status').notNull().default('active'),
+  startedAt: integer('started_at').notNull().default(0),
+  endsAt: integer('ends_at').notNull().default(0),
+  // Daily-use bookkeeping (IST day key + number of sessions started that day).
+  dayKey: text('day_key'),
+  dayCount: integer('day_count').notNull().default(0),
+  // Completed 6-hour sessions ever (feeds the discovery roll, max 10).
+  totalSearches: integer('total_searches').notNull().default(0),
+  // 1 = Tsunade discovered; searches disabled permanently for this user.
+  found: integer('found').notNull().default(0),
+  foundAt: integer('found_at').notNull().default(0),
+});
+
+/** Pending Itachi kill attacks awaiting Shadow Clone activation or timeout. */
+export const clonePending = table('clone_pending', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  attackerId: integer('attacker_id').notNull(),
+  targetId: integer('target_id').notNull(),
+  targetShinobi: text('target_shinobi').notNull(),
+  chatId: integer('chat_id').notNull(),
+  messageId: integer('message_id').notNull().default(0),
+  // Seconds the target had to activate the clone (by Naruto level).
+  windowSec: integer('window_sec').notNull().default(5),
+  expiresAt: integer('expires_at').notNull().default(0),
+  // pending | clone (blocked) | killed | timeout (killed)
+  status: text('status').notNull().default('pending'),
+  createdAt: integer('created_at').notNull().default(0),
+}, (t) => ({
+  targetPending: index('idx_clone_pending_target').on(t.targetId, t.status),
+}));
+
+/** Idempotency keys for at-most-once RPG effects (kills, robberies, heals, BBQ payments). */
+export const rpgTx = table('rpg_tx', {
+  key: text('key').primaryKey(),
+  createdAt: integer('created_at').notNull(),
+});
 
 // Message IDs and optional source-chat fields route topic replies back to DMs or group messages.
 export const supportMessageLinks = table('support_message_links', {
