@@ -2,6 +2,10 @@ import { db } from 'sdk';
 import { sql } from 'sdk/db';
 import { fmt } from './store.js';
 import { escapeHtml, mention } from './texts.js';
+import { dueText } from './rpg/time.js';
+import {
+  getShinobiState, isDead, isExhausted, recordPatrolCompletion, resetPatrolStreak,
+} from './rpg/state.js';
 
 const H = 3600;
 export const KINDS = {
@@ -15,7 +19,8 @@ export const KINDS = {
   },
   patrol: {
     word: 'patrol',
-    eligible: ['Naruto', 'Starter Shinobi', 'Hinata'], choose: 'Naruto, Starter Shinobi, or Hinata',
+    // Sakura may patrol the village but never undertakes missions.
+    eligible: ['Naruto', 'Starter Shinobi', 'Hinata', 'Sakura'], choose: 'Naruto, Starter Shinobi, Hinata, or Sakura',
     duration: 1 * H, cooldown: 0, xp: 30, chakra: 0,   // set to 2 * H for 120 minutes
     min: 100, max: 400, sakura: 100,
     done: '𝐏𝐀𝐓𝐑𝐎𝐋 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄', doneLine: '𝑻𝒉𝒆 𝒗𝒊𝒍𝒍𝒂𝒈𝒆 𝒊𝒔 𝒔𝒂𝒇𝒆𝒓 𝒕𝒉𝒂𝒏𝒌𝒔 𝒕𝒐 𝒚𝒐𝒖, 𝒔𝒉𝒊𝒏𝒐𝒃𝒊.',
@@ -67,14 +72,6 @@ function dur(sec) {
   const m = total % 60;
   return h > 0 ? `${h}h ${m}m` : `${m}m`;
 }
-function hm(sec) {
-  const t = Math.max(0, Math.ceil(sec / 60));
-  return `${Math.floor(t / 60)}ʜ ${t % 60}ᴍ`;
-}
-function ms(sec) {
-  const s = Math.max(0, Math.ceil(sec));
-  return `${Math.floor(s / 60)}ᴍ ${s % 60}ꜱ`;
-}
 function hours(sec) {
   const h = sec / 3600;
   return `${h} hour${h === 1 ? '' : 's'}`;
@@ -117,6 +114,18 @@ async function finish(a) {
     : await db.run(sql`UPDATE activities SET status = 'idle' WHERE telegram_id = ${id} AND shinobi = ${a.shinobi} AND status = 'active' AND ends_at <= ${t}`);
   if (won.rowsAffected === 0) return null;
 
+  // Consecutive-patrol exhaustion (2 patrols → 30 min recovery); missions
+  // break the chain. Timestamp-based, so restarts never lose it.
+  let exhaustedUntil = 0;
+  if (a.kind === 'patrol') {
+    try {
+      const ex = await recordPatrolCompletion(id, a.shinobi);
+      if (ex.exhausted) exhaustedUntil = ex.exhaustedUntil;
+    } catch (e) { console.error('[patrol exhaustion]', e); }
+  } else {
+    try { await resetPatrolStreak(id, a.shinobi); } catch (e) { console.error('[streak reset]', e); }
+  }
+
   const u = await db.get(sql`SELECT xp, first_name FROM users WHERE telegram_id = ${id}`);
   const xpBefore = u ? u.xp : 0;
   const own = await owned(id);
@@ -144,7 +153,7 @@ async function finish(a) {
   return {
     id, name: (u && u.first_name) || 'Shinobi', chatId: a.chat_id,
     kind: a.kind, shinobi: a.shinobi, coins, xp: c.xp,
-    rankUp: after !== before ? after : null, found, had,
+    rankUp: after !== before ? after : null, found, had, exhaustedUntil,
   };
 }
 
@@ -155,6 +164,7 @@ function fullText(r) {
   let s = `「${c.done}」\n\n🥷 Shinobi: ${r.shinobi}\n🍥 Coins earned: +${fmt(r.coins)}\n✦ XP earned: +${r.xp}`;
   if (r.rankUp) s += `\n🏅 Rank up: ${r.rankUp}`;
   s += `\n\n${c.doneLine}`;
+  if (r.exhaustedUntil) s += `\n\n🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.`;
   if (r.kind === 'mission') s += `\n\n⏳ Next mission available in: ${hours(c.cooldown)}`;
   if (r.had) s += `\n\n𝑱𝒊𝒓𝒂𝒊𝒚𝒂 𝒊𝒔 𝒂𝒍𝒓𝒆𝒂𝒅𝒚 𝒑𝒂𝒓𝒕 𝒐𝒇 𝒚𝒐𝒖𝒓 𝒓𝒐𝒔𝒕𝒆𝒓.`;
   return s;
@@ -165,6 +175,7 @@ function remindText(r) {
   let s = `✅ ${c.done}\n\n${r.shinobi} returned from ${c.word}.\nreward: ${fmt(r.coins)} 🍥  ·  XP +${r.xp}`;
   if (r.rankUp) s += `\n🏅 Rank up: ${r.rankUp}`;
   if (r.found) s += `\n🐸 Jiraiya joined your roster!`;
+  if (r.exhaustedUntil) s += `\n🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.`;
   return s;
 }
 // Short DM.
@@ -172,11 +183,13 @@ function dmText(r) {
   const c = KINDS[r.kind];
   let s = `✅ ${c.done}\n\n${r.shinobi} returned from ${c.word}.\n🍥 +${fmt(r.coins)}  ·  ✦ XP +${r.xp}`;
   if (r.found) s += `\n🐸 Jiraiya joined your roster!`;
+  if (r.exhaustedUntil) s += `\n🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.`;
   return s;
 }
 
 // Finished activities of ONE user (shown in their own reply).
-async function settleOwn(user) {
+// Also exported so opening the Gate/Inventory refreshes statuses first.
+export async function settleOwn(user) {
   const t = now();
   const due = await db.all(sql`SELECT telegram_id, shinobi, kind, ends_at, base_roll, chat_id FROM activities WHERE telegram_id = ${user.id} AND status = 'active' AND ends_at <= ${t}`);
   const blocks = [];
@@ -208,23 +221,33 @@ export async function sweepActivities() {
 async function dispatch(user, kind, rawName, chatId) {
   const c = KINDS[kind];
   const id = user.id;
+  const t = now();
   const shinobi = canonical(rawName);
   if (!shinobi) return { status: 'unknown', name: escapeHtml(String(rawName).trim().slice(0, 30)) };
   if (!c.eligible.includes(shinobi)) return { status: 'not_eligible', shinobi };
   const own = await owned(id);
   if (!own.has(shinobi)) return { status: 'not_owned', shinobi };
 
+  // Physical state guards — persisted timestamps, not memory timers.
+  const st = await getShinobiState(id, shinobi);
+  if (isDead(st, t)) return { status: 'dead', shinobi, until: st.deadUntil };
+  if (isExhausted(st, t)) return { status: 'exhausted', shinobi, until: st.exhaustedUntil };
+  // Naruto & Jiraiya are busy while a Tsunade search session is running.
+  if (shinobi === 'Naruto' || shinobi === 'Jiraiya') {
+    const s = await db.get(sql`SELECT status, ends_at FROM tsunade_search WHERE telegram_id = ${id}`);
+    if (s && s.status === 'active') return { status: 'searching', shinobi, until: s.ends_at };
+  }
+
   await db.run(sql`INSERT OR IGNORE INTO activities (telegram_id, shinobi, kind) VALUES (${id}, ${shinobi}, ${kind})`);
   const row = await db.get(sql`SELECT kind, status, ends_at, cooldown_until FROM activities WHERE telegram_id = ${id} AND shinobi = ${shinobi}`);
-  const t = now();
 
   if (row.status === 'active') {
     return row.kind === kind
-      ? { status: 'already_active', shinobi, left: row.ends_at - t }
-      : { status: 'busy', shinobi, other: row.kind, left: row.ends_at - t };
+      ? { status: 'already_active', shinobi, left: row.ends_at - t, endsAt: row.ends_at }
+      : { status: 'busy', shinobi, other: row.kind, left: row.ends_at - t, endsAt: row.ends_at };
   }
   if (kind === 'mission' && row.cooldown_until > t) {
-    return { status: 'cooldown', shinobi, left: row.cooldown_until - t };
+    return { status: 'cooldown', shinobi, left: row.cooldown_until - t, until: row.cooldown_until };
   }
   if (c.chakra) {
     const q = await chakraQty(id);
@@ -251,7 +274,7 @@ async function dispatch(user, kind, rawName, chatId) {
       return { status: 'failed' };
     }
   }
-  return { status: 'ok', shinobi };
+  return { status: 'ok', shinobi, endsAt: t + c.duration };
 }
 
 // own = true means the text already contains the user's mention.
@@ -262,16 +285,22 @@ function notice(kind, r, user) {
   switch (r.status) {
     case 'ok':
       return kind === 'mission'
-        ? { own: true, text: `${quote('⚔️ 𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐃𝐈𝐒𝐏𝐀𝐓𝐂𝐇𝐄𝐃')}\n\n🥷 ${m}\n⚔️ ${bold(sh)} has been dispatched.\n\n⚡ −${c.chakra} chakra\n⏳ returns in ${hours(c.duration)}.\n\nwait for the return. 🍃` }
-        : { own: true, text: `${quote('🥷 𝐏𝐀𝐓𝐑𝐎𝐋 𝐃𝐈𝐒𝐏𝐀𝐓𝐂𝐇𝐄𝐃')}\n\n🥷 ${m}\n${EMO[sh]} ${bold(sh)} has been sent to patrol konoha.\n\n⏳ returns in ${hours(c.duration)}.` };
+        ? { own: true, text: `${quote('⚔️ 𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐃𝐈𝐒𝐏𝐀𝐓𝐂𝐇𝐄𝐃')}\n\n🥷 ${m}\n⚔️ ${bold(sh)} has departed for the mission.\n\n⚡ −${c.chakra} chakra\n🎯 Expected completion: ${dueText(r.endsAt)}\n\n❄️ Check back when the mission ends to see its outcome! 🍃` }
+        : { own: true, text: `${quote('🥷 𝐏𝐀𝐓𝐑𝐎𝐋 𝐃𝐈𝐒𝐏𝐀𝐓𝐂𝐇𝐄𝐃')}\n\n🥷 ${m}\n${EMO[sh]} ${bold(sh)} has been sent to patrol konoha.\n\n🏃 Expected return: ${dueText(r.endsAt)}\n\n❄️ Come back after his return to check the results and continue your journey!` };
     case 'already_active':
       return kind === 'mission'
-        ? { own: true, text: `⚔️ ${m}, ${bold(`${sh} is already on a mission.`)}\n\n⏳ returns in: ${ms(r.left)}` }
-        : { own: true, text: `${quote('🥷 𝐏𝐀𝐓𝐑𝐎𝐋 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒')}\n\n🥷 ${m}\n${EMO[sh]} ${bold(sh)} is still patrolling konoha.\n⏳ time remaining: ${hm(r.left)}` };
+        ? { own: true, text: `⚔️ ${m}, ${bold(`${sh} is already on a mission.`)}\n\n🎯 completes at: ${dueText(r.endsAt)}` }
+        : { own: true, text: `${quote('🥷 𝐏𝐀𝐓𝐑𝐎𝐋 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒')}\n\n🥷 ${m}\n${EMO[sh]} ${bold(sh)} is still patrolling konoha.\n🏃 returns at: ${dueText(r.endsAt)}` };
     case 'busy':
       return kind === 'mission'
-        ? { own: true, text: `🚪${m}, ${bold(`${sh} is on patrol.`)}\n\n⏳ returns in ${hm(r.left)}. can't mission until patrol ends.` }
-        : { own: true, text: `🚪${m}, ${bold(`${sh} is on mission.`)}\n\n⏳ returns in ${hm(r.left)}. can't patrol until mission ends.` };
+        ? { own: true, text: `🚪${m}, ${bold(`${sh} is on patrol.`)}\n\n🏃 returns at ${dueText(r.endsAt)}. can't mission until patrol ends.` }
+        : { own: true, text: `🚪${m}, ${bold(`${sh} is on mission.`)}\n\n🎯 completes at ${dueText(r.endsAt)}. can't patrol until mission ends.` };
+    case 'dead':
+      return { own: true, text: `☠️ ${m}, ${bold(`${sh} is dead.`)}\n\n🕊️ revives automatically at ${dueText(r.until)}.` };
+    case 'exhausted':
+      return { own: true, text: `🔥 ${m}, ${bold(`${sh} is exhausted.`)}\n\n✅ ready again at ${dueText(r.until)}.\n» Instant recovery is available at /map → BBQ (200 🍥).` };
+    case 'searching':
+      return { own: true, text: `🔎 ${m}, ${bold(`${sh} is searching for Lady Tsunade.`)}\n\n⏳ the search completes at ${dueText(r.until)}.\n» Check /search_tsuna when it finishes.` };
     case 'not_owned':
       return { own: true, text: `❌ ${m}, ${bold(`you don't own ${sh}.`)}\n\nrecruit this shinobi from\n/shinobi_store first.` };
     case 'not_eligible':
@@ -279,7 +308,7 @@ function notice(kind, r, user) {
     case 'unknown':
       return { text: `「${c.inel}」\n\n${r.name} cannot undertake ${c.word}s.\n\n» Choose ${c.choose} instead.` };
     case 'cooldown':
-      return { text: `「𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐂𝐎𝐎𝐋𝐃𝐎𝐖𝐍」\n\n🥷 Shinobi: ${sh}\n⏳ Available in: ${dur(r.left)}\n\n𝑬𝒗𝒆𝒏 𝒔𝒉𝒊𝒏𝒐𝒃𝒊 𝒏𝒆𝒆𝒅 𝒕𝒊𝒎𝒆 𝒕𝒐 𝒓𝒆𝒄𝒐𝒗𝒆𝒓.` };
+      return { text: `「𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐂𝐎𝐎𝐋𝐃𝐎𝐖𝐍」\n\n🥷 Shinobi: ${sh}\n⏳ Available at: ${dueText(r.until)}\n\n𝑬𝒗𝒆𝒏 𝒔𝒉𝒊𝒏𝒐𝒃𝒊 𝒏𝒆𝒆𝒅 𝒕𝒊𝒎𝒆 𝒕𝒐 𝒓𝒆𝒄𝒐𝒗𝒆𝒓.` };
     case 'no_chakra':
       return { text: `「𝐂𝐇𝐀𝐊𝐑𝐀 𝐃𝐄𝐏𝐋𝐄𝐓𝐄𝐃」\n\nRequired: chakra x ${c.chakra} ⚡\nAvailable: chakra x ${fmt(r.have)} ⚡\n\n𝑹𝒆𝒔𝒕𝒐𝒓𝒆 𝒚𝒐𝒖𝒓 𝒄𝒉𝒂𝒌𝒓𝒂 𝒃𝒆𝒇𝒐𝒓𝒆 𝒅𝒊𝒔𝒑𝒂𝒕𝒄𝒉.\n\n» Use /claim or /buy chakra 100.` };
     default:
@@ -305,15 +334,23 @@ async function usage(user, kind) {
   return { text: `「𝐍𝐎 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐄𝐋𝐄𝐂𝐓𝐄𝐃」\n\nYou need an eligible shinobi for this ${c.word}.\n\n» Choose ${c.choose} to continue.\n\nUse: /${c.word} &lt;shinobi name&gt;\n\n${list}` };
 }
 
-// Returns { body, dms }. dms = short DM texts for completed activities.
+// Returns { body, dms, status, shinobi }. dms = short DM texts for completed activities.
 export async function runActivity(user, kind, rawName, chatId) {
   await ensureUser(user.id);
   const own = await settleOwn(user);
   const items = own.blocks.map((text) => ({ text }));
-  if (rawName) items.push(notice(kind, await dispatch(user, kind, rawName, chatId), user));
-  else items.push(await usage(user, kind));
+  let status = 'usage';
+  let shinobi = null;
+  if (rawName) {
+    const d = await dispatch(user, kind, rawName, chatId);
+    status = d.status;
+    shinobi = d.shinobi || null;
+    items.push(notice(kind, d, user));
+  } else {
+    items.push(await usage(user, kind));
+  }
   const body = items
     .map((it, i) => (i === 0 && !it.own ? `${mention(user)}\n\n${it.text}` : it.text))
     .join('\n\n');
-  return { body, dms: own.dms };
+  return { body, dms: own.dms, status, shinobi };
 }

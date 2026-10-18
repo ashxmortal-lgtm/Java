@@ -8,7 +8,9 @@ import {
   BBQ_RECOVERY_INTERVAL_SEC,
   BBQ_RECOVERY_AMOUNT,
   MAX_CHAKRA,
+  BBQ_HEAL_COST,
 } from './constants.js';
+import { clearExhaustion } from '../rpg/state.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -113,4 +115,65 @@ export async function applyBbqRecovery(telegramId = null) {
     `);
   }
   return granted;
+}
+
+// ---- Instant exhaustion recovery (200 🍥 per shinobi who needs it) ----
+
+/** Shinobi currently exhausted (persisted timestamps). */
+export async function listExhausted(telegramId) {
+  const t = now();
+  const rows = await db.all(sql`
+    SELECT shinobi, exhausted_until FROM shinobi_state
+    WHERE telegram_id = ${telegramId} AND exhausted_until > ${t}
+  `);
+  return rows || [];
+}
+
+/**
+ * Instantly recover the selected exhausted shinobi at BBQ_HEAL_COST each.
+ * Server-side enforcement: only shinobi who are ACTUALLY exhausted right now
+ * are charged and cleared; ready shinobi are skipped without charge.
+ */
+export async function healExhaustedAtBbq(telegramId, selected) {
+  const t = now();
+  const names = [...new Set(selected || [])];
+  if (!names.length) return { code: 'none', healed: [], cost: 0 };
+
+  // Re-check server-side: who still needs recovery at this moment?
+  const need = [];
+  for (const name of names) {
+    const r = await db.get(sql`
+      SELECT shinobi FROM shinobi_state
+      WHERE telegram_id = ${telegramId} AND shinobi = ${name} AND exhausted_until > ${t}
+    `);
+    if (r) need.push(name);
+  }
+  if (!need.length) return { code: 'none', healed: [], cost: 0 };
+
+  const cost = BBQ_HEAL_COST * need.length;
+  await db.run(sql`INSERT OR IGNORE INTO users (telegram_id, balance) VALUES (${telegramId}, 0)`);
+  const charged = await db.run(sql`
+    UPDATE users SET balance = balance - ${cost}
+    WHERE telegram_id = ${telegramId} AND balance >= ${cost}
+  `);
+  if (charged.rowsAffected === 0) {
+    const u = await db.get(sql`SELECT balance FROM users WHERE telegram_id = ${telegramId}`);
+    return { code: 'no_coins', cost, have: u ? u.balance : 0, need };
+  }
+
+  const healed = [];
+  for (const name of need) {
+    // Conditional clear: if the state changed mid-loop the charge is refunded.
+    const r = await db.run(sql`
+      UPDATE shinobi_state SET exhausted_until = 0, patrol_streak = 0
+      WHERE telegram_id = ${telegramId} AND shinobi = ${name} AND exhausted_until > ${t}
+    `);
+    if (r.rowsAffected === 0) {
+      await db.run(sql`UPDATE users SET balance = balance + ${BBQ_HEAL_COST} WHERE telegram_id = ${telegramId}`);
+      continue;
+    }
+    healed.push(name);
+  }
+  if (!healed.length) return { code: 'none', healed: [], cost: 0 };
+  return { code: 'ok', healed, cost: BBQ_HEAL_COST * healed.length };
 }

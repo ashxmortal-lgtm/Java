@@ -8,7 +8,7 @@ import { db } from 'sdk';
 import { sql } from 'sdk/db';
 import { style, escapeHtml } from '../texts.js';
 import { screenText, screenKeyboard, fmt } from '../store.js';
-import { runActivity, KINDS } from '../activities.js';
+import { runActivity, settleOwn, KINDS } from '../activities.js';
 import { MAP_ENABLED, MAX_CHAKRA } from './constants.js';
 import {
   mapKeyboard,
@@ -31,7 +31,16 @@ import {
   listBbqSessions,
   startBbq,
   stopBbq,
+  listExhausted,
+  healExhaustedAtBbq,
 } from './bbq.js';
+import { collectStatus, gateLine, extrasLines } from '../rpg/status.js';
+import { dueText } from '../rpg/time.js';
+import {
+  trainSession,
+  sakuraHealStatus, sakuraHeal, sakuraHealInfoText,
+  katsuyuStatus, katsuyuHeal, katsuyuRestore, restorableTimers,
+} from '../rpg/training.js';
 import {
   ramenKeyboard,
   fieldMealKeyboard,
@@ -101,10 +110,7 @@ const LOC_COPY = {
   },
   training: {
     title: '🥷 TRAINING GROUND',
-    lines: [
-      'Sakura training requires Tsunade (not in the current roster).',
-      'This location is reserved for a future update.',
-    ],
+    lines: ['Tsunade trains Sakura · Jiraiya trains Naruto.', 'One session per shinobi per day.'],
   },
   hotsprings: {
     title: '♨️ HOT SPRINGS',
@@ -176,59 +182,22 @@ async function showScreen(chatId, panelMessageId, user, bodyInner, keyboard, loc
 
 const now = () => Math.floor(Date.now() / 1000);
 
-function fmtReturn(endsAt) {
-  const left = Math.max(0, (endsAt || 0) - now());
-  if (left <= 0) return 'returning soon';
-  const m = Math.ceil(left / 60);
-  if (m < 60) return `${m}m left`;
-  const h = Math.floor(m / 60);
-  const rm = m % 60;
-  return `${h}h ${rm}m left`;
-}
-
-/** Status line for each owned shinobi at the Gate. */
+/** Status line for each owned shinobi at the Gate (exact IST return times). */
 async function gateRosterLines(telegramId) {
-  let names = [];
+  // Refresh first: pay out any finished activities so nothing shows stale.
   try {
-    names = await ownedNames(telegramId);
+    await settleOwn({ id: telegramId });
   } catch (e) {
-    console.error('[gate owned]', e);
-    return ['Could not load inventory.'];
+    console.error('[gate settle]', e);
   }
-  if (!names.length) return ['No shinobi owned yet. Recruit at Stores.'];
-
-  let actMap = {};
-  try {
-    const acts = await db.all(sql`
-      SELECT shinobi, kind, status, ends_at
-      FROM activities
-      WHERE telegram_id = ${telegramId}
-    `);
-    actMap = Object.fromEntries((acts || []).map((a) => [a.shinobi, a]));
-  } catch (e) {
-    console.error('[gate activities]', e);
+  const status = await collectStatus(telegramId);
+  if (!status.rows.length) return ['No shinobi owned yet. Recruit at Stores.'];
+  const lines = status.rows.map(gateLine);
+  for (const r of status.rows) {
+    for (const ex of extrasLines(r)) lines.push(`<i>${escapeHtml(ex)}</i>`);
   }
-
-  let bbqSet = new Set();
-  try {
-    const bbq = await listBbqSessions(telegramId);
-    bbqSet = new Set((bbq || []).map((s) => s.shinobi));
-  } catch (e) {
-    console.error('[gate bbq]', e);
-  }
-
-  const lines = [];
-  for (const name of names) {
-    const emoji = EMO[name] || '🥷';
-    const a = actMap[name];
-    if (a && a.status === 'active') {
-      const label = a.kind === 'mission' ? 'On mission' : 'On patrol';
-      lines.push(`${emoji} <b>${escapeHtml(name)}</b> — ${label} (${fmtReturn(a.ends_at)})`);
-    } else if (bbqSet.has(name)) {
-      lines.push(`${emoji} <b>${escapeHtml(name)}</b> — At BBQ`);
-    } else {
-      lines.push(`${emoji} <b>${escapeHtml(name)}</b> — Available`);
-    }
+  if (status.skills && (status.skills.protectedUntil || 0) > status.now) {
+    lines.push(`<i>🛡️ Jiraiya protection until ${dueText(status.skills.protectedUntil, status.now)}</i>`);
   }
   return lines;
 }
@@ -244,6 +213,83 @@ async function gateBody(telegramId) {
       'You can still try Send Available on Patrol.',
     ]);
   }
+}
+
+// --- Training Ground / healing panel helpers ---
+
+function trainResultBody(r) {
+  if (r.code === 'not_owned') return locBody('🥷 TRAINING GROUND', [`You don't own ${escapeHtml(r.shinobi)} yet.`]);
+  if (r.code === 'no_trainer') return locBody('🥷 TRAINING GROUND', [`Training requires ${escapeHtml(r.trainer)} on your roster.`]);
+  if (r.code === 'dead') return locBody('🥷 TRAINING GROUND', [`☠️ ${escapeHtml(r.shinobi)} is dead — revives at ${dueText(r.until)}.`]);
+  if (r.code === 'exhausted') return locBody('🥷 TRAINING GROUND', [`🔥 ${escapeHtml(r.shinobi)} is exhausted — ready at ${dueText(r.until)}.`, '» Instant recovery at BBQ (200 🍥).']);
+  if (r.code === 'cooldown') return locBody('🥷 TRAINING GROUND', [`🏋️ ${escapeHtml(r.shinobi)} already trained today.`, `Next session: ${dueText(r.until)}.`]);
+  if (r.code === 'searching') return locBody('🥷 TRAINING GROUND', [`🔎 ${escapeHtml(r.shinobi)} is away searching for Lady Tsunade.`, `Search completes: ${dueText(r.until)}.`]);
+  const lines = [
+    `✅ ${escapeHtml(r.shinobi)} trained with ${escapeHtml(r.trainer)}.`,
+    `Sessions completed: ${r.sessions}`,
+    `Next session: ${dueText(r.nextTrainAt)}`,
+  ];
+  if (r.levelUp) lines.push(`🏅 Level up! ${escapeHtml(r.shinobi)} is now Lv. ${r.levelUp}.`);
+  if (r.shinobi === 'Naruto') lines.push("Naruto's level-up requirements: COMING SOON.");
+  return locBody('🏋️ TRAINING COMPLETE', lines);
+}
+
+async function sakuraHealBody(telegramId) {
+  const s = await sakuraHealStatus(telegramId);
+  const info = sakuraHealInfoText(s);
+  const lines = [info];
+  if (s.unlocked && s.dead && s.cooldownUntil <= s.now) {
+    lines.push('Tap below to revive Sakura. She can patrol again right away.');
+    lines.push('(Missions remain closed to Sakura — village rules.)');
+  }
+  if (s.uses >= 3) lines.push("🐌 Katsuyu's Healing is unlocked.");
+  else if (s.unlocked) lines.push(`🐌 Katsuyu's Healing unlocks after ${3 - s.uses} more healing use(s).`);
+  return locBody("🌸 SAKURA'S HEALING", lines);
+}
+
+function katsuyuKeyboard(userId) {
+  return {
+    inline_keyboard: [
+      [{ text: "🐌 Use Katsuyu's Healing", callback_data: guard('map_kat_use', userId) }],
+      backToMapRow(userId),
+    ],
+  };
+}
+
+async function katsuyuBody(telegramId) {
+  const s = await katsuyuStatus(telegramId);
+  const lines = [];
+  if (!s.unlocked) {
+    lines.push("Locked — unlocked after Sakura's Healing is used 3 times.");
+  } else {
+    lines.push('+200 ⚡ chakra on use.');
+    lines.push('Restores one eligible timer (mission cooldown or exhaustion).');
+    lines.push('Revives a dead shinobi — with 24h of Katsuyu protection.');
+    if (s.cooldownUntil > s.now) lines.push(`Ready at ${dueText(s.cooldownUntil, s.now)}.`);
+    else lines.push('Ready now.');
+  }
+  return locBody("🐌 KATSUYU'S HEALING", lines);
+}
+
+function katsuyuRestoreKeyboard(userId, result) {
+  const rows = [];
+  for (const t of result.restorable || []) {
+    rows.push([{
+      text: `${t.kind === 'exhaustion' ? '🔥' : '⏳'} ${t.shinobi} — clear ${t.kind === 'exhaustion' ? 'exhaustion' : 'mission cooldown'}`,
+      callback_data: `map_kat_restore:${t.kind}:${t.shinobi}:${result.healKey}:${userId}`,
+    }]);
+  }
+  rows.push(backToMapRow(userId));
+  return { inline_keyboard: rows };
+}
+
+async function katsuyuRestoreBody(telegramId, result) {
+  const lines = [
+    `+${result.chakra} ⚡ chakra added.`,
+  ];
+  if (result.revived) lines.push(`🕊️ ${escapeHtml(result.revived)} revived with 24h of Katsuyu protection 🛡️`);
+  lines.push('Choose ONE timer to restore:');
+  return locBody("🐌 KATSUYU'S HEALING USED", lines);
 }
 
 async function clearGateSelection(telegramId) {
@@ -308,6 +354,15 @@ async function availableShinobi(telegramId) {
   try {
     const bbq = await listBbqSessions(telegramId);
     for (const s of bbq || []) busy.add(s.shinobi);
+  } catch (_) {}
+  // Dead or exhausted shinobi can't be dispatched either (server-side guards).
+  try {
+    const t = now();
+    const blocked = await db.all(sql`
+      SELECT shinobi FROM shinobi_state
+      WHERE telegram_id = ${telegramId} AND (dead_until > ${t} OR exhausted_until > ${t})
+    `);
+    for (const s of blocked || []) busy.add(s.shinobi);
   } catch (_) {}
   return names.filter((n) => !busy.has(n));
 }
@@ -488,7 +543,7 @@ export async function handleMapCallback(cb) {
         await editRichOr(
           msg,
           user,
-          storeContent(screen, user.id, { fromMap: true }),
+          await storeContent(screen, user.id, { fromMap: true }),
           async () => {
             await editMapRich(chatId, messageId, style(screenText(screen)), screenKeyboard(screen, user.id, { fromMap: true }));
           },
@@ -506,7 +561,7 @@ export async function handleMapCallback(cb) {
         await editRichOr(
           msg,
           user,
-          storeContent('main', user.id, { fromMap: true }),
+          await storeContent('main', user.id, { fromMap: true }),
           async () => {
             await editMapRich(chatId, messageId, style(screenText('main')), screenKeyboard('main', user.id, { fromMap: true }));
           },
@@ -517,7 +572,7 @@ export async function handleMapCallback(cb) {
           await richOr(
             chatId,
             user,
-            storeContent('main', user.id, { fromMap: true }),
+            await storeContent('main', user.id, { fromMap: true }),
             async () => {
               await sendMapRich(chatId, style(screenText('main')), screenKeyboard('main', user.id, { fromMap: true }));
             },
@@ -747,8 +802,14 @@ export async function handleMapCallback(cb) {
       const results = [];
       for (const shinobi of selected) {
         const r = await runActivity(user, 'patrol', shinobi, chatId);
-        results.push(`${EMO[shinobi] || '🥷'} ${shinobi}: dispatched`);
-        // Note: runActivity pays on completion via existing flow; pending claim is for map-tracked rewards when added
+        const label = r.status === 'ok'
+          ? 'dispatched'
+          : r.status === 'already_active'
+            ? 'already on patrol'
+            : r.status === 'exhausted'
+              ? 'exhausted — skipped'
+              : r.status === 'dead' ? 'dead — skipped' : 'not dispatched';
+        results.push(`${EMO[shinobi] || '🥷'} ${escapeHtml(shinobi)}: ${label}`);
       }
       await clearGateSelection(user.id);
       const body = locBody('🚪 PATROL DISPATCHED', results);
@@ -960,6 +1021,97 @@ export async function handleMapCallback(cb) {
       return true;
     }
 
+    // --- BBQ: instant exhaustion recovery (200 🍥 per shinobi) ---
+    if (action === 'map_bbq_heal') {
+      await answer(cb);
+      await clearGateSelection(user.id);
+      const exhausted = await listExhausted(user.id);
+      if (!exhausted.length) {
+        await showScreen(
+          chatId,
+          messageId,
+          user,
+          locBody('🍖 BBQ — HEAL EXHAUSTION', [
+            'No shinobi is exhausted right now.',
+            'Exhaustion starts after two consecutive patrols (30 min recovery).',
+          ]),
+          bbqKeyboard(user.id),
+          'bbq',
+        );
+        return true;
+      }
+      const selected = new Set();
+      const rows = exhausted.map((s) => [{
+        text: `⬜️ ${EMO[s.shinobi] || '🥷'} ${s.shinobi} — ready at ${dueText(s.exhausted_until)}`,
+        callback_data: `map_bbq_htog:${s.shinobi}:${user.id}`,
+      }]);
+      rows.push([
+        { text: `🍖 Recover (200 🍥 each)`, callback_data: guard('map_bbq_hpay', user.id) },
+        { text: '✖️ Cancel', callback_data: guard('map_loc_bbq', user.id) },
+      ]);
+      rows.push(backToMapRow(user.id));
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🍖 BBQ — HEAL EXHAUSTION', ['Tap exhausted shinobi to select.']),
+        { inline_keyboard: rows },
+        'bbq',
+      );
+      return true;
+    }
+
+    if (action === 'map_bbq_htog' && parts.length >= 3) {
+      const shinobi = parts[1];
+      await toggleGateSelection(user.id, shinobi);
+      await answer(cb);
+      const exhausted = await listExhausted(user.id);
+      const selected = await listGateSelection(user.id);
+      const rows = exhausted.map((s) => [{
+        text: `${selected.has(s.shinobi) ? '✅' : '⬜️'} ${EMO[s.shinobi] || '🥷'} ${s.shinobi} — ready at ${dueText(s.exhausted_until)}`,
+        callback_data: `map_bbq_htog:${s.shinobi}:${user.id}`,
+      }]);
+      rows.push([
+        { text: '🍖 Recover (200 🍥 each)', callback_data: guard('map_bbq_hpay', user.id) },
+        { text: '✖️ Cancel', callback_data: guard('map_loc_bbq', user.id) },
+      ]);
+      rows.push(backToMapRow(user.id));
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🍖 BBQ — HEAL EXHAUSTION', [`Selected: ${selected.size}`]),
+        { inline_keyboard: rows },
+        'bbq',
+      );
+      return true;
+    }
+
+    if (action === 'map_bbq_hpay') {
+      const selected = [...(await listGateSelection(user.id))];
+      const result = await healExhaustedAtBbq(user.id, selected);
+      await clearGateSelection(user.id);
+      if (result.code === 'none') {
+        await answer(cb, 'No selected shinobi needs recovery (already ready).', true);
+        await showScreen(chatId, messageId, user, await gateBody(user.id), gateKeyboard(user.id), 'gate');
+        return true;
+      }
+      if (result.code === 'no_coins') {
+        await answer(cb, `Not enough coins: need ${fmt(result.cost)} 🍥, have ${fmt(result.have)} 🍥.`, true);
+        return true;
+      }
+      await answer(cb, `Recovered ${result.healed.length} shinobi (−${fmt(result.cost)} 🍥)`, true);
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🍖 RECOVERED', result.healed.map((n) => `${EMO[n] || '🥷'} ${escapeHtml(n)} is ready again — −${fmt(result.cost)} 🍥`)),
+        bbqKeyboard(user.id),
+        'bbq',
+      );
+      return true;
+    }
+
     if (action === 'map_open_ability') {
       await answer(cb);
       try {
@@ -987,8 +1139,96 @@ export async function handleMapCallback(cb) {
       return true;
     }
 
+    // --- Training Ground ---
     if (action === 'map_train_sakura') {
-      await answer(cb, 'Sakura training requires Tsunade — not available yet.', true);
+      await answer(cb);
+      const r = await trainSession(user.id, 'Sakura', 'Tsunade');
+      await showScreen(chatId, messageId, user, trainResultBody(r), trainingKeyboard(user.id), 'training');
+      return true;
+    }
+
+    if (action === 'map_train_naruto') {
+      await answer(cb);
+      const r = await trainSession(user.id, 'Naruto', 'Jiraiya');
+      await showScreen(chatId, messageId, user, trainResultBody(r), trainingKeyboard(user.id), 'training');
+      return true;
+    }
+
+    if (action === 'map_sk_heal_view') {
+      await answer(cb);
+      await showScreen(chatId, messageId, user, sakuraHealBody(user.id), trainingKeyboard(user.id), 'training');
+      return true;
+    }
+
+    if (action === 'map_sk_heal') {
+      const r = await sakuraHeal(user.id);
+      if (r.code === 'locked') {
+        await answer(cb, `Sakura's Healing unlocks at Lv. 4 (now Lv. ${r.level}).`, true);
+        return true;
+      }
+      if (r.code === 'cooldown') {
+        await answer(cb, `Already used — ready at ${dueText(r.until)}.`, true);
+        return true;
+      }
+      if (r.code === 'not_dead') {
+        await answer(cb, 'Sakura is not dead — healing is not needed.', true);
+        return true;
+      }
+      if (r.code === 'not_owned') {
+        await answer(cb, 'Sakura is not on your roster.', true);
+        return true;
+      }
+      if (r.code === 'duplicate') {
+        await answer(cb);
+        return true;
+      }
+      await answer(cb, 'Sakura has been healed! 🌸', true);
+      await showScreen(chatId, messageId, user, sakuraHealBody(user.id), trainingKeyboard(user.id), 'training');
+      return true;
+    }
+
+    // --- Katsuyu's Healing ---
+    if (action === 'map_kat') {
+      await answer(cb);
+      await showScreen(chatId, messageId, user, katsuyuBody(user.id), katsuyuKeyboard(user.id), 'training');
+      return true;
+    }
+
+    if (action === 'map_kat_use') {
+      const r = await katsuyuHeal(user.id);
+      if (r.code === 'locked') {
+        await answer(cb, "Katsuyu's Healing unlocks after 3 uses of Sakura's Healing.", true);
+        return true;
+      }
+      if (r.code === 'cooldown') {
+        await answer(cb, `Already used — ready at ${dueText(r.until)}.`, true);
+        return true;
+      }
+      if (r.code === 'duplicate') {
+        await answer(cb);
+        return true;
+      }
+      await answer(cb, `+${r.chakra} ⚡ chakra granted!`, true);
+      r.restorable = await restorableTimers(user.id);
+      await showScreen(chatId, messageId, user, katsuyuRestoreBody(user.id, r), katsuyuRestoreKeyboard(user.id, r), 'training');
+      return true;
+    }
+
+    if (action === 'map_kat_restore' && parts.length >= 4) {
+      const kind = parts[1];
+      const shinobi = parts[2];
+      const healKey = parts[3];
+      const r = await katsuyuRestore(user.id, kind, shinobi, healKey);
+      if (r.code === 'duplicate') {
+        await answer(cb, 'This Katsuyu use already restored a timer.', true);
+        return true;
+      }
+      if (r.code === 'nothing') {
+        await answer(cb, 'That timer already expired.', true);
+        return true;
+      }
+      await answer(cb, `${shinobi}'s ${kind === 'exhaustion' ? 'exhaustion' : 'mission cooldown'} cleared!`, true);
+      await showScreen(chatId, messageId, user, katsuyuBody(user.id), katsuyuKeyboard(user.id), 'training');
       return true;
     }
 

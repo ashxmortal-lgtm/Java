@@ -1,11 +1,21 @@
+/**
+ * /inventory — full shinobi status table.
+ * Shows every owned shinobi (not just the equipped one) with their live,
+ * timestamp-derived status, plus chakra and balance.
+ */
+
 import { db } from 'sdk';
 import { api } from './message_api.js';
 import { eq } from 'sdk/db';
 import { users, inventory } from '../schema.js';
+import { style, escapeHtml } from './texts.js';
+import { fmt } from './store.js';
+import { table } from './rich.js';
+import { collectStatus, statusText, extrasLines, fullName } from './rpg/status.js';
+import { dueText } from './rpg/time.js';
 
 const para = (...t) => ({ type: 'paragraph', text: t.length === 1 ? t[0] : t });
 const head = (text) => ({ type: 'heading', text, size: 2 });
-const divider = { type: 'divider' };
 const row = (...buttons) => ({ type: 'buttons', buttons, align: 'center' });
 const cb = (text, data, style) => (style ? { text, callback_data: data, style } : { text, callback_data: data });
 const rich = (blocks) => ({ blocks });
@@ -52,24 +62,44 @@ export async function buildInventoryBlocks(user) {
   const items = await db.select().from(inventory).where(eq(inventory.telegramId, uid)).all();
 
   const shinobi = items.filter((i) => isShinobi(i) && !isJutsu(i));
-  const chakra = rowU?.chakra ?? 0;
+  // Chakra is stored in the inventory as the 'Chakra' item.
+  const chakraItem = items.find((i) => i.itemName === 'Chakra');
+  const chakra = chakraItem ? chakraItem.qty : 0;
   const balance = rowU?.balance ?? 0;
 
-  const shinobiLines = shinobi.length
-    ? shinobi.map((s) => {
-        const q = s.qty && s.qty > 1 ? ` x ${s.qty}` : '';
-        return `❯ ${s.itemName}${q}`;
-      })
-    : ['❯ (empty)'];
-
-  return [
+  // Live, persisted status for every owned shinobi (Inventory rule #2).
+  const blocks = [
     para(mention(user), "'s INVENTORY"),
-    head('⚔️ SHINOBI'),
-    quoteLines(shinobiLines),
-    para(`⚡ CHAKRA: ${Number(chakra).toLocaleString('en-US')}`),
-    para(`🍥 BALANCE: ${Number(balance).toLocaleString('en-US')}`),
-    row(cb('🌀 Jutsu', 'inv:jutsu', 'primary')),
+    head('⚔️ SHINOBI STATUS'),
   ];
+  if (shinobi.length) {
+    const status = await collectStatus(uid);
+    const byName = Object.fromEntries(status.rows.map((r) => [r.name, r]));
+    const tableRows = [['Shinobi', 'Status']];
+    const details = [];
+    for (const s of shinobi) {
+      const r = byName[s.itemName];
+      const nm = `${escapeHtml(fullName(s.itemName))} · Lv. ${r ? r.level : 1}`;
+      tableRows.push([nm, r ? statusText(r) : '🟢 Ready']);
+      for (const ex of r ? extrasLines(r) : []) details.push(`· ${ex}`);
+    }
+    blocks.push(table(tableRows));
+    // Protection applies to the whole roster — one shared detail line.
+    if (status.skills && (status.skills.protectedUntil || 0) > status.now) {
+      details.push(`· 🛡️ Jiraiya protection until ${dueText(status.skills.protectedUntil, status.now)}`);
+    }
+    if (details.length) {
+      blocks.push(quoteLines(details.slice(0, 12)));
+    }
+  } else {
+    blocks.push(quoteLines(['❯ (no shinobi yet — recruit at /shinobi_store)']));
+  }
+
+  blocks.push(para(`⚡ CHAKRA: ${Number(chakra).toLocaleString('en-US')}`));
+  blocks.push(para(`🍥 BALANCE: ${Number(balance).toLocaleString('en-US')}`));
+  blocks.push(para(style('❄️ Your shinobi are making progress! Return when their timers finish and continue your journey.')));
+  blocks.push(row(cb('🌀 Jutsu', 'inv:jutsu', 'primary')));
+  return blocks;
 }
 
 export async function buildJutsuBlocks(user) {
@@ -79,7 +109,7 @@ export async function buildJutsuBlocks(user) {
   const lines = jutsu.length
     ? jutsu.map((j) => {
         const q = j.qty && j.qty > 1 ? ` x ${j.qty}` : '';
-        return `❯ ${j.itemName}${q}`;
+        return `❯ ${escapeHtml(j.itemName)}${q}`;
       })
     : ['❯ No jutsu unlocked yet'];
 
@@ -95,12 +125,14 @@ export async function inventoryText(userId) {
   const rowU = await db.select().from(users).where(eq(users.telegramId, userId)).get();
   const items = await db.select().from(inventory).where(eq(inventory.telegramId, userId)).all();
   const shinobi = items.filter((i) => isShinobi(i) && !isJutsu(i));
+  const chakraItem = items.find((i) => i.itemName === 'Chakra');
+  const chakra = chakraItem ? chakraItem.qty : 0;
   const lines = shinobi.length
-    ? shinobi.map((s) => `❯ ${s.itemName}${s.qty > 1 ? ` x ${s.qty}` : ''}`)
+    ? shinobi.map((s) => `❯ ${escapeHtml(s.itemName)}${s.qty > 1 ? ` x ${s.qty}` : ''}`)
     : ['❯ (empty)'];
   return (
     `INVENTORY\n\n⚔️ SHINOBI\n${lines.join('\n')}\n\n` +
-    `⚡ CHAKRA: ${rowU?.chakra ?? 0}\n🍥 BALANCE: ${rowU?.balance ?? 0}`
+    `⚡ CHAKRA: ${chakra}\n🍥 BALANCE: ${rowU?.balance ?? 0}`
   );
 }
 

@@ -4,11 +4,11 @@ const q = (s) => `<blockquote>${s}</blockquote>`;
 
 export const ROWS = [
   ['⚔️ Sasuke', 'adventurer · /mission → 🍥 300'],
-  ['🌸 Sakura', 'booster · +🍥 100 on /daily, /mission, /patrol · +⚡ 50 on /daily'],
-  ['🍥 Naruto', 'shadow clones · ×3 on /mission, /patrol · may find Jiraiya'],
-  ['🐸 Jiraiya', 'protection · /protect → 24h immunity · found via /patrol'],
-  ['👁️ Itachi', 'kill & rob · /kill → 🍥 50–300 · /rob needs ≥ 🍥 500 · kill once per target per day'],
-  ['👁️ Hinata', 'byakugan · /byakugan → reveals protection time · once per day, private'],
+  ['🌸 Sakura', 'booster · /claim bonus grows with level · patrol only (no missions) · healing at Lv. 4'],
+  ['🍥 Naruto', 'shadow clones · ×3 on /mission, /patrol · may find Jiraiya · clone window grows with level'],
+  ['🐸 Jiraiya', 'protection · /protect → 24h immunity · found via /patrol · trains Naruto'],
+  ['👁️ Itachi', 'kill & rob · /kill → 🍥 50–300 · /rob needs a dead target · 5 levels by successful kills · cannot patrol/mission'],
+  ['👁️ Hinata', 'byakugan · /byakugan → reveals protection time · once per 24h, private'],
   ['🧠 Mind Transmission', '/mt → hidden message · jutsu owners only'],
   ['🍃 Rank', 'academy → genin → chūnin → jōnin → anbu → kage'],
   ['👤 Profile', '/profile → rank, XP, roster & stats'],

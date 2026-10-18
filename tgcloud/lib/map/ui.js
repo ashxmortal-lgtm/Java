@@ -73,6 +73,7 @@ export function ichirakuKeyboard(userId) {
   };
 }
 
+/** BBQ — chakra recovery + instant exhaustion recovery */
 export function bbqKeyboard(userId) {
   return {
     inline_keyboard: [
@@ -80,15 +81,20 @@ export function bbqKeyboard(userId) {
         btn('Send to BBQ', guard('map_bbq_select', userId)),
         btn('Recall', guard('map_bbq_recall', userId)),
       ],
+      [btn('🔥 Heal Exhaustion (200 🍥 each)', guard('map_bbq_heal', userId))],
       backToMapRow(userId),
     ],
   };
 }
 
+/** Training Ground — Tsunade trains Sakura, Jiraiya trains Naruto. */
 export function trainingKeyboard(userId) {
   return {
     inline_keyboard: [
-      [btn('Sakura Training', guard('map_train_sakura', userId))],
+      [btn('🌸 Sakura Training (Tsunade)', guard('map_train_sakura', userId))],
+      [btn('🍥 Naruto Training (Jiraiya)', guard('map_train_naruto', userId))],
+      [btn('🌸 Sakura\'s Healing', guard('map_sk_heal_view', userId))],
+      [btn('🐌 Katsuyu\'s Healing', guard('map_kat', userId))],
       backToMapRow(userId),
     ],
   };
