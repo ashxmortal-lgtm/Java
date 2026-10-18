@@ -1,4 +1,5 @@
 import { handleStudyCommand } from '../lib/study/router.js';
+import { sendTrackerLauncher } from '../lib/study/hub.js';
 import { handleTopicCommand, handleTopicText } from '../lib/topic.js';
 import { api } from '../lib/message_api.js';
 import { buildHncMenu } from '../lib/hnc.js';
@@ -28,16 +29,21 @@ const MINI_APP_START_COMMANDS = {
   mini_study: '/study',
   mini_duel: '/duel',
   mini_map: '/map',
+  mini_tracker: '/tracker',
 };
 
 export default async function (message, ctx) {
   // Fixed, whitelisted deep-link payloads let the Mini App launch these commands
   // directly in the bot DM without accepting arbitrary command text from a URL.
   if (message.chat?.type === 'private') {
-    const start = String(message.text || '').trim().match(/^\/start(?:@\w+)?\s+(mini_todo|mini_studytime|mini_study|mini_duel|mini_map)$/i);
+    const start = String(message.text || '').trim().match(/^\/start(?:@\w+)?\s+(mini_todo|mini_studytime|mini_study|mini_duel|mini_map|mini_tracker)$/i);
     const key = start && start[1].toLowerCase();
     const command = key && MINI_APP_START_COMMANDS[key];
     if (command) {
+      if (key === 'mini_tracker') {
+        await sendTrackerLauncher(message.chat.id);
+        return;
+      }
       if (key === 'mini_map') {
         await handleMapCommand({ ...message, text: '/map' });
         return;

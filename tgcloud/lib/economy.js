@@ -9,6 +9,7 @@ export const BONUS_COINS = 1000;   // day 7
 export const BONUS_CHAKRA = 200;   // day 7
 export const SAKURA_COINS = 100;   // Sakura owners
 export const SAKURA_CHAKRA = 50;
+export const DAILY_XP = 50;
 
 // IST = UTC + 5:30, no daylight saving.
 const IST_OFFSET_MS = (5 * 60 + 30) * 60 * 1000;
@@ -52,7 +53,7 @@ export async function claimDaily(id) {
   const chakra = DAILY_CHAKRA + (bonus ? BONUS_CHAKRA : 0) + sakuraChakra;
 
   // One guarded statement: only the first request of the day pays.
-  const res = await db.run(sql`UPDATE users SET balance = balance + ${coins}, last_claim_date = ${today}, claim_streak = ${streak} WHERE telegram_id = ${id} AND (last_claim_date IS NULL OR last_claim_date != ${today})`);
+  const res = await db.run(sql`UPDATE users SET balance = balance + ${coins}, xp = xp + ${DAILY_XP}, last_claim_date = ${today}, claim_streak = ${streak} WHERE telegram_id = ${id} AND (last_claim_date IS NULL OR last_claim_date != ${today})`);
   if (res.rowsAffected === 0) {
     return { claimed: false, streak, balance: await getBalance(id) };
   }
@@ -68,5 +69,5 @@ export async function claimDaily(id) {
       chakraFailed = true;
     }
   }
-  return { claimed: true, streak, bonus, sakura, sakuraCoins, sakuraChakra, coins, chakra, chakraFailed, balance: await getBalance(id) };
+  return { claimed: true, streak, bonus, sakura, sakuraCoins, sakuraChakra, coins, chakra, xp: DAILY_XP, chakraFailed, balance: await getBalance(id) };
 }

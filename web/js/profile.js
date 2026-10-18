@@ -64,9 +64,24 @@
 
     content.replaceChildren();
     const identity = element('section', 'profile-identity');
-    identity.append(element('div', 'profile-avatar', '🥷'));
+    // Bot's profile picture (data: URI from the bot); snowflake fallback.
+    const avatar = element('div', 'avatar');
+    if (typeof profile.botAvatar === 'string' && profile.botAvatar.indexOf('data:image/') === 0) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.decoding = 'async';
+      img.src = profile.botAvatar;
+      img.addEventListener('error', () => { img.style.display = 'none'; });
+      avatar.append(img);
+    }
+    avatar.append(element('span', 'avatar-fallback', '❄️'));
+    identity.append(avatar);
     const nameBlock = element('div', '');
     nameBlock.append(element('div', 'profile-name', profile.displayName || 'Shinobi'));
+    if (profile.life) {
+      nameBlock.append(element('div', 'life ' + (profile.life.alive ? 'alive' : 'dead'),
+        profile.life.alive ? '🟢 Alive' : '☠️ ' + (profile.life.label || 'Dead')));
+    }
     nameBlock.append(element('div', 'profile-username', profile.username ? `@${profile.username}` : 'Telegram profile'));
     identity.append(nameBlock);
     content.append(identity);

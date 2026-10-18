@@ -71,19 +71,15 @@ async function backfillKnownGroups() {
     } catch (_) {}
     try {
       await db.insert(KG).values({
-        chatId: s.chatId, title, username, active: 1, approved: 1, updatedAt: nowSec(),
+        chatId: s.chatId, title, username, active: 1, updatedAt: nowSec(),
       }).run();
     } catch (_) {}
   }
 }
 
-async function listApprovedGroups() {
+async function listKnownGroups() {
   await backfillKnownGroups();
-  return (await db.select().from(KG).all()).filter((g) => g.approved === 1 || g.approved == null);
-}
-async function listDisapprovedGroups() {
-  await backfillKnownGroups();
-  return (await db.select().from(KG).all()).filter((g) => g.approved === 0);
+  return (await db.select().from(KG).all()).filter((g) => g.active !== 0);
 }
 
 async function groupInviteLink(chatId, username) {
@@ -101,42 +97,6 @@ async function groupInviteLink(chatId, username) {
   }
 }
 
-async function handleDissGrp(message) {
-  const from = message.from;
-  if (!from) return true;
-  if (from.id !== OWNER_ID) {
-    await sayRich(message.chat.id, deniedBlocks(from));
-    return true;
-  }
-  const raw = String(message.text || '').trim().split(/\s+/)[1];
-  if (!raw || !/^-?\d+$/.test(raw)) {
-    await sayRich(message.chat.id, [para(mention(from)), para('Usage: /diss_grp <chat_id>')]);
-    return true;
-  }
-  const chatId = Number(raw);
-  await backfillKnownGroups();
-  const row = await db.select().from(KG).where(eq(KG.chatId, chatId)).get();
-  if (!row) {
-    await sayRich(message.chat.id, [
-      para(mention(from)), head('❌ GROUP NOT FOUND'), para('No matching group record was found.'),
-    ]);
-    return true;
-  }
-  if (row.approved === 0) {
-    await sayRich(message.chat.id, [
-      para(mention(from)), head('⚠️ ALREADY DISAPPROVED'), para('This group is already disapproved.'),
-    ]);
-    return true;
-  }
-  await db.update(KG).set({ approved: 0, updatedAt: nowSec() }).where(eq(KG.chatId, chatId)).run();
-  await sayRich(message.chat.id, [
-    para(mention(from)), head('✅ GROUP DISAPPROVED'),
-    para('Group ID: ', bold(String(chatId))),
-    para('This group is no longer approved.'),
-  ]);
-  return true;
-}
-
 function statsBlocks(from, counts) {
   const blockedLine = counts.blockedTracked ? String(counts.blocked) : 'Not tracked';
   return [
@@ -145,8 +105,7 @@ function statsBlocks(from, counts) {
     pullQuote(
       para('👤 Users Started     ', bold(String(counts.started))),
       para('🚫 Users Blocked     ', bold(blockedLine)),
-      para('✅ Approved Groups   ', bold(String(counts.approved))),
-      para('❌ Disapproved       ', bold(String(counts.disapproved))),
+      para('👥 Groups            ', bold(String(counts.groups))),
     ),
     para('Data from the bot’s records.'),
     row(cb('🔄 Refresh', 'stats:refresh', 'primary')),
@@ -164,8 +123,7 @@ async function computeStats() {
     started,
     blocked,
     blockedTracked,
-    approved: (await listApprovedGroups()).length,
-    disapproved: (await listDisapprovedGroups()).length,
+    groups: (await listKnownGroups()).length,
   };
 }
 
@@ -185,14 +143,14 @@ async function handleStats(message) {
  * | Group (id) — name is embedded link when invite exists | Added by (mention) |
  * User asked 3 columns: name(id) | adder | link — link is embedded IN the name, not a button.
  */
-async function renderApprovedPage(from, page) {
-  const all = await listApprovedGroups();
+async function renderGroupsPage(from, page) {
+  const all = await listKnownGroups();
   const total = all.length;
   if (!total) {
     return [
       para(mention(from)),
-      head('📋 APPROVED GROUPS'),
-      para('No groups are currently approved.'),
+      head('📋 GROUPS'),
+      para('No groups recorded yet.'),
     ];
   }
   const pages = Math.max(1, Math.ceil(total / PAGE));
@@ -230,7 +188,7 @@ async function renderApprovedPage(from, page) {
 
   const blocks = [
     para(mention(from)),
-    head('📋 APPROVED GROUPS'),
+    head('📋 GROUPS'),
     para('Total: ', bold(String(total)), `  ·  page ${p + 1}/${pages}`),
     {
       type: 'table',
@@ -248,14 +206,14 @@ async function renderApprovedPage(from, page) {
   return blocks;
 }
 
-async function handleApprovedList(message) {
+async function handleGroupsList(message) {
   const from = message.from;
   if (!from) return true;
   if (from.id !== OWNER_ID) {
     await sayRich(message.chat.id, deniedBlocks(from));
     return true;
   }
-  await sayRich(message.chat.id, await renderApprovedPage(from, 0));
+  await sayRich(message.chat.id, await renderGroupsPage(from, 0));
   return true;
 }
 
@@ -263,9 +221,8 @@ export async function handleOwnerCommand(message) {
   const text = message.text || '';
   if (!text.startsWith('/')) return false;
   const cmd = text.split(/[\s@]/)[0].toLowerCase();
-  if (cmd === '/diss_grp') return handleDissGrp(message);
   if (cmd === '/stats') return handleStats(message);
-  if (cmd === '/approved_list') return handleApprovedList(message);
+  if (cmd === '/groups' || cmd === '/approved_list') return handleGroupsList(message);
   return false;
 }
 
@@ -286,13 +243,6 @@ export async function handleOwnerCallback(cq) {
     return true;
   }
   await api.answerCallbackQuery({ callback_query_id: cq.id });
-  if (cq.message) await editRich(cq.message, await renderApprovedPage(cq.from, Number(data.slice(7)) || 0));
+  if (cq.message) await editRich(cq.message, await renderGroupsPage(cq.from, Number(data.slice(7)) || 0));
   return true;
-}
-
-export async function isGroupApproved(chatId) {
-  await backfillKnownGroups();
-  const row = await db.select().from(KG).where(eq(KG.chatId, chatId)).get();
-  if (!row) return false;
-  return row.approved === 1 || row.approved == null;
 }

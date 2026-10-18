@@ -31,7 +31,7 @@
   };
 
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({
-    '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;',
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
   const fmt = (v) => {
     if (v == null || v === '') return '—';
@@ -129,36 +129,41 @@
 
   function shell(inner) {
     const isHome = state.page === 'home';
-    const snow = isHome
-      ? '<div class="snow-layer" aria-hidden="true">' + Array.from({ length: 18 }, (_, i) => {
-          const left = ((i * 37) % 100);
-          const delay = ((i * 0.7) % 8).toFixed(1);
-          const dur = (10 + (i % 6)).toFixed(1);
-          const size = 8 + (i % 5) * 2;
-          return '<span style="left:' + left + '%;animation-delay:' + delay + 's;animation-duration:' + dur + 's;font-size:' + size + 'px">❄</span>';
-        }).join('') + '</div>'
-      : '';
-    return '<div class="shell' + (isHome ? ' shell-home' : '') + '">' + snow
+    return '<div class="shell' + (isHome ? ' shell-home' : '') + '">'
       + '<header class="top"><div class="snow" aria-hidden="true">❄️</div><div><div class="brand">Miss Fr❄️zen</div><div class="sub">synced with the bot</div></div></header>'
       + inner
       + footer()
       + '</div>';
   }
 
+  function currentProfile() {
+    return state.profile || (state.data && state.data.profile) || null;
+  }
+
+  // Bot's profile picture (sent by the bot as a data: URI); snowflake fallback.
   function avatarHtml() {
-    const photo = tgUser && tgUser.photo_url ? String(tgUser.photo_url).trim() : '';
-    // No profile photo → snowflake fallback (not a letter).
-    const img = photo
-      ? '<img src="' + esc(photo) + '" alt="" width="76" height="76" decoding="async" referrerpolicy="no-referrer" onerror="this.style.display=\'none\'">'
+    const p = currentProfile();
+    const src = p && typeof p.botAvatar === 'string' && p.botAvatar.indexOf('data:image/') === 0 ? p.botAvatar : '';
+    const img = src
+      ? '<img src="' + esc(src) + '" alt="" width="76" height="76" decoding="async" onerror="this.style.display=\'none\'">'
       : '';
-    return '<div class="avatar" role="img" aria-label="profile">' + img + '<span class="avatar-fallback">❄️</span></div>';
+    return '<div class="avatar" role="img" aria-label="Miss Frozen">' + img + '<span class="avatar-fallback">❄️</span></div>';
+  }
+
+  // Dead / alive line shown under the name.
+  function lifeHtml() {
+    const p = currentProfile();
+    const life = p && p.life;
+    if (!life) return '<p class="id-line">Your shinobi account</p>';
+    return '<p class="life ' + (life.alive ? 'alive' : 'dead') + '">'
+      + (life.alive ? '🟢 Alive' : '☠️ ' + esc(life.label || 'Dead')) + '</p>';
   }
 
   function pageHome() {
     const name = displayName() || 'Shinobi';
     return '<section class="hero-card"><div class="identity">'
       + avatarHtml()
-      + '<div><h1 class="who">' + esc(name) + '</h1><p class="id-line">Your shinobi account</p></div>'
+      + '<div><h1 class="who">' + esc(name) + '</h1>' + lifeHtml() + '</div>'
       + '</div></section>'
       + (state.error && !state.data ? errorHtml() : '')
       + '<div class="modes">'
@@ -242,7 +247,7 @@
     return '<section>' + pageHead('Profile', 'Same record as /profile.', 'Game mode') + errorHtml()
       + '<div class="hero-card"><div class="identity">' + avatarHtml()
       + '<div><h1 class="who">' + esc(d.displayName || displayName() || 'Shinobi') + '</h1>'
-      + '<p class="id-line">' + (d.username ? '@' + esc(d.username) : 'No public username') + '</p></div></div></div>'
+      + lifeHtml() + '<p class="id-line">' + (d.username ? '@' + esc(d.username) : 'No public username') + '</p></div></div></div>'
       + '<div class="stats-grid">'
       + stat('Rank', d.rank) + stat('XP', d.xpText) + stat('Coins', fmt(d.balance)) + stat('Chakra', fmt(d.chakra))
       + stat('Kills', fmt(d.kills)) + stat('Streak', fmt(d.streak) + '/7') + stat('Last claim', d.lastClaim) + stat('Patrols', fmt(d.narutoPatrols))
@@ -713,10 +718,24 @@
     }
   });
 
+  // Opened from the bot's "Open biology tracker" button: ?page=tracker
+  // (or Telegram start_param=tracker) lands straight on the tracker, with
+  // Home → Study mode behind it so Back still works.
+  function openDeepLink() {
+    let want = '';
+    try { want = new URLSearchParams(window.location.search).get('page') || ''; } catch (_) {}
+    if (!want && tg && tg.initDataUnsafe && tg.initDataUnsafe.start_param) want = String(tg.initDataUnsafe.start_param);
+    if (want === 'tracker') {
+      state.stack = ['home', 'study'];
+      state.page = 'tracker';
+    }
+  }
+
   function boot() {
     root = document.getElementById('app');
     if (!root || root.dataset.booted === '1') return;
     root.dataset.booted = '1';
+    openDeepLink();
     render();
     if (serverlessAvailable()) refresh();
     else state.error = Object.assign(new Error('Open this Mini App from the bot inside Telegram.'), { type: 'UNAVAILABLE', status: 0 });

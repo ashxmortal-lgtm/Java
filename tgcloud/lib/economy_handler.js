@@ -4,7 +4,7 @@ import { runBackup, runFullBackup } from "./backup.js";
 import { BotApiError } from 'sdk';
 import { api } from './message_api.js';
 import {
-  claimDaily, DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA,
+  claimDaily, DAILY_XP, DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA,
   SAKURA_COINS, SAKURA_CHAKRA,
 } from './economy.js';
 import { render, style, escapeHtml, COIN } from './texts.js';
@@ -48,7 +48,7 @@ function claimBody(r) {
   if (!r.claimed) {
     return `⏳ 𝐀𝐋𝐑𝐄𝐀𝐃𝐘 𝐂𝐋𝐀𝐈𝐌𝐄𝐃\n\nCome back after 12:00 AM IST.\n\nStreak: ${r.streak}/7  ${bar}\nBalance: ${fmt(r.balance)} 🍥`;
   }
-  let s = `✅ 𝐃𝐀𝐈𝐋𝐘 𝐂𝐋𝐀𝐈𝐌\n\n+${fmt(DAILY_COINS)} ${COIN}\n+chakra x ${DAILY_CHAKRA} ⚡`;
+  let s = `✅ 𝐃𝐀𝐈𝐋𝐘 𝐂𝐋𝐀𝐈𝐌\n\n+${fmt(DAILY_COINS)} ${COIN}\n+chakra x ${DAILY_CHAKRA} ⚡\n+${DAILY_XP} XP ✦`;
   if (r.sakura) {
     s += `\n\n🌸 𝐒𝐀𝐊𝐔𝐑𝐀 𝐁𝐎𝐎𝐒𝐓\n+${fmt(r.sakuraCoins ?? SAKURA_COINS)} ${COIN}\n+chakra x ${r.sakuraChakra ?? SAKURA_CHAKRA} ⚡`;
   }

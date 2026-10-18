@@ -13,25 +13,70 @@ import { api } from '../message_api.js';
 import { render, style, escapeHtml, mention } from '../texts.js';
 import { send } from '../chat.js';
 import { fmt } from '../store.js';
-import { richBtn } from '../map/rich.js';
 import { dueText } from './time.js';
 import {
   once, getShinobiState, ensureShinobiState, markDead, isDead,
   getUserSkills, setUserSkills, getEquipped, ownedSet, activateProtection,
 } from './state.js';
 import {
-  itachiLevelOf, itachiRobPct, cloneWindowSec,
+  itachiRobPct, cloneWindowSec,
   KILL_COINS_MIN, KILL_COINS_MAX, ROB_LOCKOUT_SEC, BYAKUGAN_COOLDOWN_SEC,
 } from './levels.js';
 
 const now = () => Math.floor(Date.now() / 1000);
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
+function topicOf(message) {
+  return message && message.message_thread_id
+    ? { message_thread_id: message.message_thread_id }
+    : {};
+}
+
+function sentMessageId(sent) {
+  return Number(sent?.message_id || sent?.result?.message_id || 0) || 0;
+}
+
+function isNarutoName(name) {
+  return String(name || '').trim().toLowerCase() === 'naruto';
+}
+
+async function replyHtml(message, body) {
+  return send(message.chat.id, {
+    text: style(body),
+    parse_mode: 'HTML',
+    reply_parameters: { message_id: message.message_id, allow_sending_without_reply: true },
+    ...topicOf(message),
+  });
+}
+
+function killLine(attackerUser, targetUser) {
+  return `${mention(attackerUser)} killed ${mention(targetUser)} using itachi`;
+}
+
+function alreadyDeadLine(targetUser) {
+  return `☠️ ${mention(targetUser)} is already dead.`;
+}
+
+async function dmKilled(targetUser, attackerUser, groupTitle) {
+  const title = groupTitle || 'the group';
+  try {
+    await api.sendMessage({
+      chat_id: targetUser.id,
+      text: style(
+        `☠️ You've been killed by ${mention(attackerUser)} in ${escapeHtml(title)}.\n\n` +
+        `Use /protect so the next strike can't land.`,
+      ),
+      parse_mode: 'HTML',
+    });
+  } catch (_) { /* target never started the bot */ }
+}
+
 function replyText(message, body) {
   return send(message.chat.id, {
     text: render(message.from, body),
     parse_mode: 'HTML',
-    reply_parameters: { message_id: message.message_id },
+    reply_parameters: { message_id: message.message_id, allow_sending_without_reply: true },
+    ...topicOf(message),
   });
 }
 
@@ -72,67 +117,79 @@ export async function killTarget(attackerId, targetId, targetShinobi) {
   return { code: 'ok', coins, kills: u ? u.kills : 0, reviveAt };
 }
 
-function killResultText(attackerUser, targetName, shinobi, r) {
-  const m = mention(attackerUser);
-  if (r.code === 'already_dead') {
-    return `${m}, ${escapeHtml(targetName)}'s ${escapeHtml(shinobi)} is already dead.\n\n🕊️ revives at ${dueText(r.reviveAt)}.`;
-  }
-  return (
-    `${m}, ⚔️ 𝐊𝐈𝐋𝐋 𝐂𝐎𝐍𝐅𝐈𝐑𝐌𝐄𝐃\n\n` +
-    `${escapeHtml(targetName)}'s ${escapeHtml(shinobi)} has fallen.\n` +
-    `🍥 bounty: +${fmt(r.coins)}\n🔪 successful kills: ${fmt(r.kills)}\n\n` +
-    `🕊️ ${escapeHtml(shinobi)} revives automatically at ${dueText(r.reviveAt)}.`
-  );
+function killResultText(attackerUser, targetUser, r) {
+  if (r.code === 'already_dead') return alreadyDeadLine(targetUser);
+  return killLine(attackerUser, targetUser);
 }
 
 // ---- shadow clone flow ----
 
-async function cloneWarningHtml(pending, targetName, targetUser, attackerName, shinobi) {
-  const m = mention(targetUser);
-  const btn = richBtn('🌀 Shadow Clone Jutsu', `cl:go:${pending.id}:${targetUser.id}`, 'danger');
-  return (
-    `<p>⚠️ <b>𝐊𝐈𝐋𝐋 𝐖𝐀𝐑𝐍𝐈𝐍𝐆</b></p>` +
-    `<p>${m}, ${escapeHtml(attackerName)}'s Itachi is striking your ${escapeHtml(shinobi)}!</p>` +
-    `<p>🌀 Activate Shadow Clone Jutsu within <b>${pending.windowSec}s</b> — before ${dueText(pending.expiresAt)}.</p>` +
-    `<p><tg-button-row align="center">${btn}</tg-button-row></p>`
-  );
+function cloneBlocks(pending, targetUser, attackerName, windowSec) {
+  const mentionNode = {
+    type: 'text_mention',
+    text: targetUser.first_name || 'Shinobi',
+    user: {
+      id: targetUser.id,
+      is_bot: !!targetUser.is_bot,
+      first_name: targetUser.first_name || 'Shinobi',
+      username: targetUser.username,
+    },
+  };
+  return [
+    { type: 'paragraph', text: [{ type: 'bold', text: '⚠️ KILL WARNING' }] },
+    { type: 'paragraph', text: [mentionNode, `, ${attackerName}'s Itachi is striking your Naruto!`] },
+    { type: 'paragraph', text: `🌀 Shadow Clone Jutsu — you have ${windowSec} seconds. Tap before it lands.` },
+    {
+      type: 'buttons',
+      align: 'center',
+      buttons: [{
+        text: '🌀 Shadow Clone Jutsu',
+        callback_data: `cl:go:${pending.id}:${targetUser.id}`,
+        style: 'danger',
+      }],
+    },
+  ];
 }
 
-async function sendCloneWarning(pending, targetName, targetUser, attackerName, shinobi) {
-  const html = await cloneWarningHtml(pending, targetName, targetUser, attackerName, shinobi);
+async function sendCloneWarning(pending, targetUser, attackerName, windowSec, message) {
+  const blocks = cloneBlocks(pending, targetUser, attackerName, windowSec);
+  const base = {
+    chat_id: pending.chatId,
+    reply_parameters: {
+      message_id: message.message_id,
+      allow_sending_without_reply: true,
+    },
+    ...topicOf(message),
+  };
   try {
     const sent = await api.sendRichMessage({
-      chat_id: pending.chatId,
-      rich_message: { html, skip_entity_detection: true },
+      ...base,
+      rich_message: { blocks, skip_entity_detection: true },
     });
-    const messageId = sent?.message_id ?? sent?.result?.message_id;
-    if (messageId) {
-      await db.run(sql`UPDATE clone_pending SET message_id = ${messageId} WHERE id = ${pending.id}`);
-    }
-    return messageId;
+    return sentMessageId(sent);
   } catch (e) {
     console.error('[clone warning]', e?.description || e);
-    // Classic fallback keeps the flow working (plain button, no red style).
-    try {
-      const sent = await api.sendMessage({
-        chat_id: pending.chatId,
-        text: style(
-          `⚠️ 𝐊𝐈𝐋𝐋 𝐖𝐀𝐑𝐍𝐈𝐍𝐆\n\n${mention(targetUser)}, ${escapeHtml(attackerName)}'s Itachi is striking your ${escapeHtml(shinobi)}!\n\n🌀 Activate Shadow Clone Jutsu within ${pending.windowSec}s — before ${dueText(pending.expiresAt)}.`,
-        ),
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [[{ text: '🌀 Shadow Clone Jutsu', callback_data: `cl:go:${pending.id}:${targetUser.id}` }]],
-        },
-      });
-      const messageId = sent?.message_id ?? sent?.result?.message_id;
-      if (messageId) {
-        await db.run(sql`UPDATE clone_pending SET message_id = ${messageId} WHERE id = ${pending.id}`);
-      }
-    } catch (e2) {
-      console.error('[clone warning fallback]', e2?.description || e2);
-    }
   }
-  return null;
+  try {
+    const sent = await api.sendMessage({
+      ...base,
+      text: style(
+        `⚠️ KILL WARNING\n\n${mention(targetUser)}, ${escapeHtml(attackerName)}'s Itachi is striking your Naruto!\n\n🌀 Shadow Clone Jutsu — you have ${windowSec} seconds. Tap before it lands.`,
+      ),
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[{
+          text: '🌀 Shadow Clone Jutsu',
+          callback_data: `cl:go:${pending.id}:${targetUser.id}`,
+          style: 'danger',
+        }]],
+      },
+    });
+    return sentMessageId(sent);
+  } catch (e2) {
+    console.error('[clone warning fallback]', e2?.description || e2);
+  }
+  return 0;
 }
 
 async function editResult(chatId, messageId, text) {
@@ -167,19 +224,27 @@ async function resolveCloneTimeout(row) {
   const attacker = await db.get(sql`SELECT first_name, username FROM users WHERE telegram_id = ${row.attacker_id}`);
   const target = await db.get(sql`SELECT first_name, username FROM users WHERE telegram_id = ${row.target_id}`);
   const attackerUser = { id: row.attacker_id, first_name: attacker?.first_name || 'Shinobi', username: attacker?.username };
-  const targetName = target?.first_name || 'Shinobi';
+  const targetUser = { id: row.target_id, first_name: target?.first_name || 'Shinobi', username: target?.username };
   const r = await killTarget(row.attacker_id, row.target_id, row.target_shinobi);
   await editResult(
     row.chat_id, row.message_id,
-    killResultText(attackerUser, targetName, row.target_shinobi, r),
+    killResultText(attackerUser, targetUser, r),
   );
+  if (r.code === 'ok') {
+    let title = 'the group';
+    try {
+      const chat = await api.getChat({ chat_id: row.chat_id });
+      title = chat?.title || title;
+    } catch (_) {}
+    await dmKilled(targetUser, attackerUser, title);
+  }
 }
 
 /** Lazily resolve expired clone windows (called on interactions). */
 export async function sweepClones() {
   const rows = await db.all(sql`
     SELECT id, attacker_id, target_id, target_shinobi, chat_id, message_id, window_sec, expires_at
-    FROM clone_pending WHERE status = 'pending' AND expires_at <= ${now()} LIMIT 10
+    FROM clone_pending WHERE status = 'pending' AND expires_at > 0 AND expires_at <= ${now()} LIMIT 10
   `);
   for (const row of rows || []) {
     try { await resolveCloneTimeout(row); } catch (e) { console.error('[clone sweep]', e); }
@@ -224,14 +289,14 @@ export async function handleKill(message) {
 
   const st = await getShinobiState(target.id, shinobi);
   if (isDead(st, now())) {
-    await replyText(message,
-      `☠️ ${escapeHtml(target.first_name || 'The target')}'s ${escapeHtml(shinobi)} is already dead.\n\n🕊️ revives at ${dueText(st.deadUntil)}.`);
+    await replyHtml(message, alreadyDeadLine(target));
     return true;
   }
 
-  if (shinobi === 'Naruto') {
+  if (isNarutoName(shinobi)) {
     const pendingRow = await db.get(sql`
-      SELECT id FROM clone_pending WHERE target_id = ${target.id} AND status = 'pending'
+      SELECT id FROM clone_pending
+      WHERE target_id = ${target.id} AND status IN ('pending', 'arming')
     `);
     if (pendingRow) {
       await replyText(message, '🌀 A kill attempt on this target is already in progress.');
@@ -240,19 +305,49 @@ export async function handleKill(message) {
     const narutoSt = await getShinobiState(target.id, 'Naruto');
     const windowSec = cloneWindowSec(narutoSt ? narutoSt.level : 1);
     const t = now();
+    // Stay 'arming' with no expiry until the warning is actually delivered,
+    // so a failed or slow send cannot skip the countdown and kill immediately.
     const ins = await db.run(sql`
       INSERT INTO clone_pending (attacker_id, target_id, target_shinobi, chat_id, window_sec, expires_at, status, created_at)
-      VALUES (${user.id}, ${target.id}, 'Naruto', ${message.chat.id}, ${windowSec}, ${t + windowSec}, 'pending', ${t})
+      VALUES (${user.id}, ${target.id}, 'Naruto', ${message.chat.id}, ${windowSec}, 0, 'arming', ${t})
     `);
-    const pending = {
-      id: ins.lastInsertRowid, windowSec, expiresAt: t + windowSec, chatId: message.chat.id,
-    };
-    await sendCloneWarning(pending, target.first_name || 'Shinobi', target, user.first_name || 'Shinobi', 'Naruto');
+    let pendingId = Number(ins.lastInsertRowid || ins.last_insert_rowid || 0);
+    if (!pendingId) {
+      const row = await db.get(sql`
+        SELECT id FROM clone_pending
+        WHERE attacker_id = ${user.id} AND target_id = ${target.id} AND status = 'arming'
+        ORDER BY id DESC LIMIT 1
+      `);
+      pendingId = row ? Number(row.id) : 0;
+    }
+    if (!pendingId) {
+      await replyText(message, '🌀 Shadow Clone warning could not be opened. Strike cancelled.');
+      return true;
+    }
+    const messageId = await sendCloneWarning(
+      { id: pendingId, chatId: message.chat.id },
+      target,
+      user.first_name || 'Shinobi',
+      windowSec,
+      message,
+    );
+    if (!messageId) {
+      await db.run(sql`UPDATE clone_pending SET status = 'cancelled' WHERE id = ${pendingId} AND status = 'arming'`);
+      await replyText(message, '🌀 Naruto was not struck — the 5 second Shadow Clone warning could not be shown. Try again.');
+      return true;
+    }
+    const armedAt = now();
+    await db.run(sql`
+      UPDATE clone_pending
+      SET status = 'pending', message_id = ${messageId}, expires_at = ${armedAt + windowSec}, window_sec = ${windowSec}
+      WHERE id = ${pendingId} AND status = 'arming'
+    `);
     return true;
   }
 
   const r = await killTarget(user.id, target.id, shinobi);
-  await replyText(message, killResultText(user, target.first_name || 'Shinobi', shinobi, r));
+  await replyHtml(message, killResultText(user, target, r));
+  if (r.code === 'ok') await dmKilled(target, user, message.chat.title || 'the group');
   return true;
 }
 
@@ -376,8 +471,8 @@ export async function handleRob(message) {
   await db.run(sql`
     UPDATE users SET balance = balance + ${steal} WHERE telegram_id = ${user.id}
   `);
-  await replyText(message,
-    `💰 𝐑𝐎𝐁 𝐒𝐔𝐂𝐂𝐄𝐒𝐒\n\nItachi (Lv. ${itachiLevelOf(u ? u.kills : 0)}) looted ${fmt(steal)} 🍥 from ${escapeHtml(target.first_name || 'the target')}'s fallen ${escapeHtml(shinobi)}.\n\n🩸 robbery rate: ${pct}%`);
+  await replyHtml(message,
+    `${mention(user)} robbed ${mention(target)}.\n${fmt(steal)} is successful Robbed.\n\nROBBERY RATE: ${pct}%`);
   return true;
 }
 
@@ -426,25 +521,31 @@ export async function handleByakugan(message) {
   }
 
   const target = message.reply_to_message.from;
-  const chatTitle = escapeHtml(message.chat.title || 'this group');
-  const btn = { text: '👁 Reveal', callback_data: `by:reveal:${user.id}:${target.id}` };
-  await send(message.chat.id, {
-    text: render(user, `👁️ 𝐁𝐘𝐀𝐊𝐔𝐆𝐀𝐍\n\n${escapeHtml(target.first_name || 'The target')} scanned. Tap below — the report is private and only you will see it.`),
+  const skills = await getUserSkills(target.id);
+  let report;
+  if ((skills.protectedUntil || 0) > now()) {
+    report = `👁️ Byakugan\n\n${escapeHtml(target.first_name || 'The target')}\n\n🛡️ Jiraiya protection ends at ${dueText(skills.protectedUntil)}.`;
+  } else {
+    report = `👁️ Byakugan\n\n${escapeHtml(target.first_name || 'The target')}\n\n🛡️ No active Jiraiya protection.`;
+  }
+  const payload = {
+    chat_id: message.chat.id,
+    text: style(report),
     parse_mode: 'HTML',
-    reply_parameters: { message_id: message.message_id },
-    reply_markup: { inline_keyboard: [[btn]] },
-  });
-
-  // Best-effort private heads-up to the target; failure is silent and safe.
+    reply_parameters: { message_id: message.message_id, allow_sending_without_reply: true },
+    ephemeral_message_parameters: { receiver_user_id: user.id },
+    ...topicOf(message),
+  };
   try {
-    await send(target.id, {
-      text: render(
-        { id: user.id, first_name: user.first_name || 'A shinobi' },
-        `👁️ ${escapeHtml(user.first_name || 'A shinobi')} viewed your protection countdown in ${chatTitle}.`,
-      ),
-      parse_mode: 'HTML',
-    });
-  } catch (_) { /* target never started the bot — fail gracefully */ }
+    await api.sendMessage(payload);
+  } catch (e) {
+    console.error('[byakugan ephemeral]', e?.description || e);
+    try {
+      await api.sendMessage({ chat_id: user.id, text: style(report), parse_mode: 'HTML' });
+    } catch (_) {
+      await replyHtml(message, report);
+    }
+  }
   return true;
 }
 

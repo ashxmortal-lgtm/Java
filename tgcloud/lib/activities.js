@@ -12,7 +12,7 @@ export const KINDS = {
   mission: {
     word: 'mission',
     eligible: ['Sasuke', 'Naruto'], choose: 'Sasuke or Naruto',
-    duration: 3 * H, cooldown: 6 * H, xp: 45, chakra: 100,
+    duration: 3 * H, cooldown: 6 * H, xpMin: 50, xpMax: 150, chakra: 100,
     min: 300, max: 300, sakura: 100,
     done: '𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄', doneLine: '𝑨 𝒎𝒊𝒔𝒔𝒊𝒐𝒏 𝒘𝒆𝒍𝒍 𝒅𝒐𝒏𝒆, 𝒔𝒉𝒊𝒏𝒐𝒃𝒊.',
     inel: '𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐈𝐍𝐄𝐋𝐈𝐆𝐈𝐁𝐋𝐄',
@@ -21,7 +21,7 @@ export const KINDS = {
     word: 'patrol',
     // Sakura may patrol the village but never undertakes missions.
     eligible: ['Naruto', 'Starter Shinobi', 'Hinata', 'Sakura'], choose: 'Naruto, Starter Shinobi, Hinata, or Sakura',
-    duration: 1 * H, cooldown: 0, xp: 30, chakra: 0,   // set to 2 * H for 120 minutes
+    duration: 1 * H, cooldown: 0, xpMin: 50, xpMax: 150, chakra: 0,   // set to 2 * H for 120 minutes
     min: 100, max: 400, sakura: 100,
     done: '𝐏𝐀𝐓𝐑𝐎𝐋 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄', doneLine: '𝑻𝒉𝒆 𝒗𝒊𝒍𝒍𝒂𝒈𝒆 𝒊𝒔 𝒔𝒂𝒇𝒆𝒓 𝒕𝒉𝒂𝒏𝒌𝒔 𝒕𝒐 𝒚𝒐𝒖, 𝒔𝒉𝒊𝒏𝒐𝒃𝒊.',
     inel: '𝐏𝐀𝐓𝐑𝐎𝐋 𝐈𝐍𝐄𝐋𝐈𝐆𝐈𝐁𝐋𝐄',
@@ -131,10 +131,12 @@ async function finish(a) {
   const own = await owned(id);
   const base = a.base_roll > 0 ? a.base_roll : rollBase(c);
   const coins = reward(c, a.shinobi, base, xpBefore, own.has('Sakura'));
-  await db.run(sql`UPDATE users SET balance = balance + ${coins}, xp = xp + ${c.xp} WHERE telegram_id = ${id}`);
+  // Random 50–150 XP per finished patrol/mission.
+  const xpGain = c.xpMin + Math.floor(Math.random() * (c.xpMax - c.xpMin + 1));
+  await db.run(sql`UPDATE users SET balance = balance + ${coins}, xp = xp + ${xpGain} WHERE telegram_id = ${id}`);
 
   const before = rankOf(xpBefore)[1];
-  const after = rankOf(xpBefore + c.xp)[1];
+  const after = rankOf(xpBefore + xpGain)[1];
 
   let found = false;
   let had = false;
@@ -152,7 +154,7 @@ async function finish(a) {
   }
   return {
     id, name: (u && u.first_name) || 'Shinobi', chatId: a.chat_id,
-    kind: a.kind, shinobi: a.shinobi, coins, xp: c.xp,
+    kind: a.kind, shinobi: a.shinobi, coins, xp: xpGain,
     rankUp: after !== before ? after : null, found, had, exhaustedUntil,
   };
 }

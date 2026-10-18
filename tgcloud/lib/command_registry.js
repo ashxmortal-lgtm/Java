@@ -42,9 +42,8 @@ export const COMMANDS = [
   { cmd: '/announce', desc: 'Announce to your registered groups (DM)', access: 'admin' },
   { cmd: '/topic', desc: 'Topic admin panel (DM)', access: 'admin' },
   // owner
-  { cmd: '/diss_grp', desc: 'Disapprove a group by chat ID', access: 'owner' },
-  { cmd: '/stats', desc: 'Bot usage & approval statistics', access: 'owner' },
-  { cmd: '/approved_list', desc: 'List approved groups', access: 'owner' },
+  { cmd: '/stats', desc: 'Bot usage statistics', access: 'owner' },
+  { cmd: '/groups', desc: 'List groups the bot is in', access: 'owner' },
   { cmd: '/ow_announce', desc: 'Owner broadcast to groups/DMs', access: 'owner' },
   { cmd: '/addcoins', desc: 'Add coins to a user', access: 'owner' },
   { cmd: '/backup', desc: 'Database backup', access: 'owner' },

@@ -3,7 +3,7 @@
 import { BotApiError } from 'sdk';
 import { api } from '../message_api.js';
 
-export const esc = (s) => String(s ?? '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
+export const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export const nowIso = () => new Date().toISOString();
 
