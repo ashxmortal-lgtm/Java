@@ -14,6 +14,7 @@ import { table } from './rich.js';
 import { collectStatus, statusParts } from './rpg/status.js';
 import { sakuraHeal, katsuyuHeal, restorableTimers, katsuyuRestore } from './rpg/training.js';
 import { dueText } from './rpg/time.js';
+import { getEquippedList } from './rpg/state.js';
 
 const para = (...t) => ({ type: 'paragraph', text: t.length === 1 ? t[0] : t });
 const head = (text, size = 2) => ({ type: 'heading', text, size });
@@ -89,13 +90,44 @@ export async function buildInventoryBlocks(user) {
 
   blocks.push(para(`⚡ CHAKRA: ${Number(chakra).toLocaleString('en-US')}`));
   blocks.push(para(`🍥 BALANCE: ${Number(balance).toLocaleString('en-US')}`));
+  // Equipped shinobi (max 3) — active skills only apply when equipped
+  try {
+    const eqList = await getEquippedList(uid);
+    if (eqList.length) {
+      blocks.push(para(`👤 EQUIPPED (${eqList.length}/3): ${eqList.join(', ')}`));
+    } else {
+      blocks.push(para('👤 EQUIPPED: none — use /equip &lt;name&gt;'));
+    }
+  } catch (_) {
+    blocks.push(para('👤 EQUIPPED: —'));
+  }
   blocks.push(para(style('❄️ Your shinobi are making progress! Return when their timers finish and continue your journey.')));
   blocks.push(row(
     cb("🌸 Sakura's Healing", 'inv:sakura', 'success'),
     cb("🐌 Katsuyu's Healing", 'inv:katsuyu', 'primary'),
   ));
-  blocks.push(row(cb('🌀 Jutsu', 'inv:jutsu', 'primary')));
+  blocks.push(row(
+    cb('🌀 Jutsu', 'inv:jutsu', 'primary'),
+    cb('owned ❄️ gifts', 'inv:gifts', 'primary'),
+  ));
   return blocks;
+}
+
+export async function buildOwnedGiftsBlocks(user) {
+  const uid = user.id || user.telegramId;
+  const items = await db.select().from(inventory).where(eq(inventory.telegramId, uid)).all();
+  const gifts = items.filter((i) => String(i.itemType || '').toLowerCase() === 'gift');
+  const lines = gifts.length
+    ? gifts.map((g) => {
+        const q = g.qty && g.qty > 1 ? ` x ${g.qty}` : '';
+        return `❯ ${escapeHtml(g.itemName)}${q}`;
+      })
+    : ['❯ No gifts owned yet'];
+  return [
+    para(mention(user), "'s GIFTS"),
+    quoteLines(lines),
+    row(cb('← Back', 'inv:home', 'primary')),
+  ];
 }
 
 export async function buildJutsuBlocks(user) {
@@ -112,7 +144,7 @@ export async function buildJutsuBlocks(user) {
   return [
     para(mention(user), "'s JUTSU"),
     quoteLines(lines),
-    row(cb('◂ Back to Inventory', 'inv:home', 'primary')),
+    row(cb('← Back', 'inv:home', 'primary')),
   ];
 }
 
@@ -187,7 +219,7 @@ async function buildRestoreBlocks(user, result, timers) {
     head("🐌 KATSUYU'S HEALING", 6),
     quoteLines(lines),
     ...rows,
-    row(cb('Back', 'inv:home', 'danger')),
+    row(cb('← Back', 'inv:home', 'danger')),
   ];
 }
 
@@ -256,9 +288,10 @@ export async function handleInventoryCallback(cq) {
     }
 
     await api.answerCallbackQuery({ callback_query_id: cq.id });
-    const blocks = data === 'inv:jutsu'
-      ? await buildJutsuBlocks(cq.from)
-      : await buildInventoryBlocks(cq.from);
+    let blocks;
+    if (data === 'inv:jutsu') blocks = await buildJutsuBlocks(cq.from);
+    else if (data === 'inv:gifts') blocks = await buildOwnedGiftsBlocks(cq.from);
+    else blocks = await buildInventoryBlocks(cq.from);
     await api.editMessageText({
       chat_id: cq.message.chat.id,
       message_id: cq.message.message_id,

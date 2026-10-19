@@ -34,7 +34,7 @@ export function mapKeyboard(userId) {
 }
 
 export function backToMapRow(userId) {
-  return [btn('◂ Back to Map', guard('map_home', userId))];
+  return [btn('← Back', guard('map_home', userId))];
 }
 
 /** Hokage Office */

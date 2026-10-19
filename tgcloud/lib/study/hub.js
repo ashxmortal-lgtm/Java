@@ -63,3 +63,67 @@ export async function handleStudyHub(message) {
     await sendBlocks(message.chat.id, fallback, opts);
   }
 }
+
+
+/** All-time study stats shown from Study ❄️ mode button */
+export async function buildStudyStatsBlocks(user) {
+  const { db } = await import('sdk');
+  const { sql } = await import('sdk/db');
+  const { getStudyCoins } = await import('../economy.js');
+  const { BIOLOGY_TRACKER } = await import('./tracker_data.js');
+  const uid = user.id;
+
+  // Aggregate chapter progress
+  let revised = 0, practiced = 0, pyqs = 0, completedChapters = 0;
+  try {
+    const rows = await db.all(sql`
+      SELECT revision_done AS rd, practice_done AS pd, pyq_done AS qd
+      FROM biology_tracker WHERE user_id = ${uid}
+    `);
+    for (const r of (rows || [])) {
+      if (r.rd) revised++;
+      if (r.pd) practiced++;
+      if (r.qd) pyqs++;
+      if (r.rd && r.pd && r.qd) completedChapters++;
+    }
+  } catch (_) {}
+
+  // Completed todos (all-time closed with completed=1)
+  let completedTodos = 0;
+  try {
+    const t = await db.get(sql`
+      SELECT COUNT(*) AS n FROM study_todos
+      WHERE user_id = ${uid} AND status = 'closed' AND completed = 1
+    `);
+    completedTodos = t ? Number(t.n) : 0;
+  } catch (_) {}
+
+  let studyCoins = 0;
+  try { studyCoins = await getStudyCoins(uid); } catch (_) {}
+
+  // Rank by study coins among all users
+  let studyRank = '—';
+  try {
+    const r = await db.get(sql`
+      SELECT COUNT(*) AS n FROM users
+      WHERE COALESCE(study_coins, 0) > ${studyCoins}
+    `);
+    studyRank = `#${(r ? Number(r.n) : 0) + 1}`;
+  } catch (_) {}
+
+  return [
+    head('📚 𝐒𝐓𝐔𝐃𝐘 𝐒𝐓𝐀𝐓𝐒'),
+    para('🥷🏼 ', mention(user)),
+    divider,
+    para(`Revised chapters: ${revised}`),
+    para(`Practiced chapters: ${practiced}`),
+    para(`PYQs chapterwise: ${pyqs}`),
+    para(`Completed todos: ${completedTodos}`),
+    para(`Coins earned through study mode: ${Number(studyCoins).toLocaleString('en-US')} 🍥  (${studyRank})`),
+    para(`Completed chapters: ${completedChapters}`),
+    para('(Including revision, practice & pyq all done per chap)'),
+    divider,
+    para(mention(user), ' your all time study stats.'),
+    para('Use: /study to open study hub'),
+  ];
+}

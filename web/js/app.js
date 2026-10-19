@@ -130,7 +130,8 @@
   function shell(inner) {
     const isHome = state.page === 'home';
     return '<div class="shell' + (isHome ? ' shell-home' : '') + '">'
-      + '<header class="top"><div class="snow" aria-hidden="true">❄️</div><div><div class="brand">Miss Fr❄️zen</div><div class="sub">synced with the bot</div></div></header>'
+      + '<header class="top">' + botHeaderAvatarHtml()
+      + '<div><div class="brand">Miss Fr❄️zen</div><div class="sub">synced with the bot</div></div></header>'
       + inner
       + footer()
       + '</div>';
@@ -140,30 +141,52 @@
     return state.profile || (state.data && state.data.profile) || null;
   }
 
-  // Bot's profile picture (sent by the bot as a data: URI); snowflake fallback.
-  function avatarHtml() {
+  // 🔴 Header: bot profile picture (always in sync via botAvatar data URI).
+  function botHeaderAvatarHtml() {
     const p = currentProfile();
     const src = p && typeof p.botAvatar === 'string' && p.botAvatar.indexOf('data:image/') === 0 ? p.botAvatar : '';
     const img = src
-      ? '<img src="' + esc(src) + '" alt="" width="76" height="76" decoding="async" onerror="this.style.display=\'none\'">'
+      ? '<img src="' + esc(src) + '" alt="" width="40" height="40" decoding="async" onerror="this.style.display=\'none\'">'
       : '';
-    return '<div class="avatar" role="img" aria-label="Miss Frozen">' + img + '<span class="avatar-fallback">❄️</span></div>';
+    return '<div class="bot-avatar snow" role="img" aria-label="Miss Frozen">' + img + '<span class="avatar-fallback">❄️</span></div>';
   }
 
-  // Dead / alive line shown under the name.
-  function lifeHtml() {
+  // 🟡 Identity: user's Telegram profile photo (initData or API).
+  function userAvatarHtml() {
+    let src = '';
+    try {
+      const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      if (u && u.photo_url) src = u.photo_url;
+    } catch (_) {}
+    const p = currentProfile();
+    if (!src && p && typeof p.userPhoto === 'string' && p.userPhoto) src = p.userPhoto;
+    const img = src
+      ? '<img src="' + esc(src) + '" alt="" width="76" height="76" decoding="async" onerror="this.style.display=\'none\'">'
+      : '';
+    const letter = (displayName() || 'S').charAt(0).toUpperCase();
+    return '<div class="avatar user-avatar" role="img" aria-label="You">' + img + '<span class="avatar-fallback">' + esc(letter) + '</span></div>';
+  }
+
+  // 🟢 Under name: Status · XP · GLOBAL RANK
+  function statusBlockHtml() {
     const p = currentProfile();
     const life = p && p.life;
-    if (!life) return '<p class="id-line">Your shinobi account</p>';
-    return '<p class="life ' + (life.alive ? 'alive' : 'dead') + '">'
-      + (life.alive ? '🟢 Alive' : '☠️ ' + esc(life.label || 'Dead')) + '</p>';
+    const statusLine = !life
+      ? 'Status: —'
+      : (life.alive
+        ? 'Status: Alive'
+        : 'Status: Dead' + (life.label && life.label.indexOf('revives') >= 0 ? ' · ' + life.label.replace(/^Dead · /, '') : ''));
+    const xp = p && p.xp != null ? Number(p.xp).toLocaleString('en-US') : '—';
+    const gr = p && p.globalRank != null ? '#' + p.globalRank : '—';
+    return '<p class="life ' + (life && !life.alive ? 'dead' : 'alive') + '">' + esc(statusLine) + '</p>'
+      + '<p class="id-line">XP: ' + esc(String(xp)) + ' · GLOBAL RANK: ' + esc(String(gr)) + '</p>';
   }
 
   function pageHome() {
     const name = displayName() || 'Shinobi';
     return '<section class="hero-card"><div class="identity">'
-      + avatarHtml()
-      + '<div><h1 class="who">' + esc(name) + '</h1>' + lifeHtml() + '</div>'
+      + userAvatarHtml()
+      + '<div><h1 class="who">' + esc(name) + '</h1>' + statusBlockHtml() + '</div>'
       + '</div></section>'
       + (state.error && !state.data ? errorHtml() : '')
       + '<div class="modes">'
@@ -244,13 +267,19 @@
     }
     const roster = (d.roster || []).map((x) => (typeof x === 'string' ? x : (x.name || x.item_name || ''))).filter(Boolean);
     const jutsu = (d.jutsu || []).map((x) => (typeof x === 'string' ? x : (x.name || x.item_name || ''))).filter(Boolean);
+    const eqList = d.equippedList || (d.life && d.life.equipped ? [d.life.equipped] : []);
     return '<section>' + pageHead('Profile', 'Same record as /profile.', 'Game mode') + errorHtml()
-      + '<div class="hero-card"><div class="identity">' + avatarHtml()
+      + '<div class="hero-card"><div class="identity">' + userAvatarHtml()
       + '<div><h1 class="who">' + esc(d.displayName || displayName() || 'Shinobi') + '</h1>'
-      + lifeHtml() + '<p class="id-line">' + (d.username ? '@' + esc(d.username) : 'No public username') + '</p></div></div></div>'
+      + statusBlockHtml()
+      + '<p class="id-line">' + (d.username ? '@' + esc(d.username) : 'No public username') + '</p></div></div></div>'
       + '<div class="stats-grid">'
-      + stat('Rank', d.rank) + stat('XP', d.xpText) + stat('Coins', fmt(d.balance)) + stat('Chakra', fmt(d.chakra))
+      + stat('Rank', d.rank) + stat('Global', d.globalRank != null ? '#' + d.globalRank : '—')
+      + stat('XP', d.xpText) + stat('Coins', fmt(d.balance)) + stat('Chakra', fmt(d.chakra))
       + stat('Kills', fmt(d.kills)) + stat('Streak', fmt(d.streak) + '/7') + stat('Last claim', d.lastClaim) + stat('Patrols', fmt(d.narutoPatrols))
+      + '</div>'
+      + '<div class="section">Equipped (' + eqList.length + '/3)</div><div class="chip-row">'
+      + (eqList.length ? eqList.map((n) => '<span class="chip">👤 ' + esc(n) + '</span>').join('') : '<span class="muted">None — use /equip</span>')
       + '</div>'
       + '<div class="section">Roster</div><div class="chip-row">'
       + (roster.length ? roster.map((n) => '<span class="chip">🥷 ' + esc(n) + '</span>').join('') : '<span class="muted">Empty</span>')

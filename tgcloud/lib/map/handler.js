@@ -368,9 +368,9 @@ function patrolPickKeyboard(userId, available, selected) {
 async function claimRewardsBody(telegramId) {
   const rows = await listPendingRewards(telegramId);
   if (!rows.length) {
-    return locBody('💰 CLAIM ALL REWARDS', [
-      'No pending rewards.',
-      'Complete missions or patrols, then return here to claim.',
+    return locBody('💰 ᴄʟᴀɪᴍ ᴀʟʟ ʀᴇᴡᴀʀᴅꜱ', [
+      'ɴᴏ ᴘᴇɴᴅɪɴɢ ʀᴇᴡᴀʀᴅꜱ.',
+      'ᴄᴏᴍᴘʟᴇᴛᴇ ᴍɪꜱꜱɪᴏɴꜱ ᴏʀ ᴘᴀᴛʀᴏʟꜱ, ᴛʜᴇɴ ʀᴇᴛᴜʀɴ ʜᴇʀᴇ ᴛᴏ ᴄʟᴀɪᴍ.',
     ]);
   }
   const mission = rows.filter((r) => (r.kind || 'patrol') === 'mission');
@@ -404,8 +404,8 @@ function claimRewardsKeyboard(userId, hasPending) {
   if (hasPending) {
     rows.push([{ text: '✅ Claim All', callback_data: guard('map_claim_confirm', userId) }]);
   }
-  rows.push([{ text: '◂ Back', callback_data: guard('map_loc_hokage', userId) }]);
-  rows.push(backToMapRow(userId));
+  // Single back only (to Hokage Office)
+  rows.push([{ text: '← Back', callback_data: guard('map_loc_hokage', userId) }]);
   return { inline_keyboard: rows };
 }
 
@@ -629,7 +629,7 @@ export async function handleMapCallback(cb) {
         );
         return true;
       }
-      rows.push([{ text: '◂ Back', callback_data: guard('map_loc_hokage', user.id) }]);
+      rows.push([{ text: '← Back', callback_data: guard('map_loc_hokage', user.id) }]);
       await showScreen(
         chatId,
         messageId,
@@ -775,6 +775,11 @@ export async function handleMapCallback(cb) {
     }
 
     if (action === 'map_psend') {
+      // Patrol dispatch is group-only
+      if (cb.message && cb.message.chat && cb.message.chat.type === 'private') {
+        await answer(cb, 'Patrol works in groups only.', true);
+        return true;
+      }
       const selected = [...(await listGateSelection(user.id))];
       if (!selected.length) {
         await answer(cb, 'Select at least one shinobi.', true);
@@ -925,7 +930,7 @@ export async function handleMapCallback(cb) {
         );
         return true;
       }
-      rows.push([{ text: '◂ Back', callback_data: guard('map_loc_bbq', user.id) }]);
+      rows.push([{ text: '← Back', callback_data: guard('map_loc_bbq', user.id) }]);
       await showScreen(
         chatId,
         messageId,
@@ -976,7 +981,7 @@ export async function handleMapCallback(cb) {
         text: `${EMO[s.shinobi] || '🥷'} ${s.shinobi}`,
         callback_data: `map_bbq_stop:${s.shinobi}:${user.id}`,
       }]);
-      rows.push([{ text: '◂ Back', callback_data: guard('map_loc_bbq', user.id) }]);
+      rows.push([{ text: '← Back', callback_data: guard('map_loc_bbq', user.id) }]);
       await showScreen(
         chatId,
         messageId,

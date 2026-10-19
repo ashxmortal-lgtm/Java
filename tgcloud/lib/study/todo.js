@@ -32,12 +32,33 @@ export async function handleTodo(message) {
   const c = message.chat.id, u = message.from.id;
   const a = await getActiveTodo(c, u);
   if (a) {
-    const blocks = ['collecting', 'choosing', 'custom'].includes(a.status)
-      ? [para('⏳ Todo setup chal raha hai. Content bhejo ya Cancel dabao.')]
-      : a.status === 'scheduled'
-        ? [head('📌 ACTIVE TODO'), para('Tumhara ek active Todo already hai.'), para('Report ', bold(fmt12(a.reportHour, a.reportMinute)), ' IST par.')]
-        : [para('📋 Todo ka check-in already bheja ja chuka hai. Completed / Not Completed dabao.')];
-    await sendBlocks(c, blocks, rp(message.message_id));
+    if (['collecting', 'choosing', 'custom'].includes(a.status)) {
+      await sendBlocks(c, [para('⏳ Todo setup chal raha hai. Content bhejo ya Cancel dabao.')], rp(message.message_id));
+      return;
+    }
+    if (a.status === 'scheduled') {
+      await sendBlocks(c, [
+        head('📌 ACTIVE TODO'),
+        para('Tumhara ek active Todo already hai.'),
+        para('Report ', bold(fmt12(a.reportHour, a.reportMinute)), ' IST par.'),
+        row(btn('change ❄️ todo', `todo_change:${a.todoId}`, 'primary')),
+      ], rp(message.message_id));
+      return;
+    }
+    // status === 'asked': show todo again with complete/incomplete + change
+    const who = mention(message.from);
+    const today = istNow().date;
+    const blocks = [
+      para(who, "'s todo"),
+      para(today),
+      para('Todo: ', a.contentText || (a.contentType === 'photo' ? '(image todo)' : '(empty)')),
+      row(
+        btn('Completed', `todo_done:${a.todoId}`, 'success'),
+        btn('incomplete', `todo_missed:${a.todoId}`, 'danger'),
+      ),
+      row(btn('change ❄️ todo', `todo_change:${a.todoId}`, 'primary')),
+    ];
+    await sendBlocks(c, blocks, { ...rp(message.message_id), skipEntities: false });
     return;
   }
   const n = nowIso();
@@ -158,21 +179,47 @@ export async function askTodo(t, today) {
 
 export async function handleTodoCb(cq) {
   const data = cq.data || '';
-  if (!/^todo_(preset:\d+:\d+|custom|cancel|done:\d+|missed:\d+)$/.test(data)) return false;
+  if (!/^todo_(preset:\d+:\d+|custom|cancel|done:\d+|missed:\d+|change:\d+)$/.test(data)) return false;
   const ans = (text) => api.answerCallbackQuery({ callback_query_id: cq.id, ...(text ? { text } : {}) });
   const msg = cq.message, u = cq.from.id;
+  if (/^todo_change:/.test(data)) {
+    const id = +data.split(':')[1];
+    const t = await getById(id);
+    if (!t) { await ans('Todo nahi mila.'); return true; }
+    if (t.userId !== u) { await ans('Ye button tumhare liye nahi hai.'); return true; }
+    // Reset to collecting so user can set a new todo
+    await db.run("UPDATE study_todos SET status='collecting', content_type=NULL, content_text=NULL, storage_chat_id=NULL, storage_message_id=NULL, report_hour=NULL, report_minute=NULL, completed=NULL, updated_at=:n WHERE todo_id=:id", { ':n': nowIso(), ':id': id });
+    await ans('Todo reset. Send new content.');
+    if (msg) {
+      await editBlocks(msg.chat.id, msg.message_id, [
+        head('📝 CREATE YOUR TODO'),
+        para('📚 What do you need to complete today?'),
+        para('✍️ Send your Todo as text or image.'),
+        divider,
+        para(bold('⏰ Report Time')),
+        para('Choose when you want me to ask for your progress.'),
+        cancelRow,
+      ]);
+    }
+    return true;
+  }
   if (/^todo_(done|missed):/.test(data)) {
     const [kind, id] = data.split(':');
     const t = await getById(+id);
     if (!t) { await ans('Todo nahi mila.'); return true; }
     if (t.userId !== u) { await ans('Ye button tumhare liye nahi hai.'); return true; }
     const ok = kind === 'todo_done' ? 1 : 0;
-    const r = await db.run("UPDATE study_todos SET completed=:ok, status='closed', updated_at=:n WHERE todo_id=:id AND status='asked'", { ':ok': ok, ':n': nowIso(), ':id': t.todoId });
+    const r = await db.run("UPDATE study_todos SET completed=:ok, status='closed', updated_at=:n WHERE todo_id=:id AND status IN ('asked','scheduled')", { ':ok': ok, ':n': nowIso(), ':id': t.todoId });
     if (!r.rowsAffected) { await ans('Ye pehle hi process ho chuka hai.'); return true; }
     await ans();
+    // Economy: +500 / -500
+    try {
+      const { adjustBalance } = await import('../economy.js');
+      await adjustBalance(u, ok ? 500 : -500, { allowPartial: true, study: true });
+    } catch (e) { console.error('todo economy', e); }
     const blocks = ok
-      ? [head('🎉 TODO COMPLETED'), para('🥷 ', mention(cq.from))]
-      : [head('😔 TODO NOT COMPLETED'), para('🥷 ', mention(cq.from)), para('🔥 𝑻𝒐𝒎𝒐𝒓𝒓𝒐𝒘\'𝒔 𝒂 𝒏𝒆𝒘 𝒅𝒂𝒚. 𝑲𝒆𝒆𝒑 𝒈𝒐𝒊𝒏𝒈.')];
+      ? [head('🎉 TODO COMPLETED'), para('🥷 ', mention(cq.from)), para('+500 🍥')]
+      : [head('😔 TODO NOT COMPLETED'), para('🥷 ', mention(cq.from)), para('-500 🍥 (or remaining)'), para('🔥 𝑻𝒐𝒎𝒐𝒓𝒓𝒐𝒘\'𝒔 𝒂 𝒏𝒆𝒘 𝒅𝒂𝒚. 𝑲𝒆𝒆𝒑 𝒈𝒐𝒊𝒏𝒈.')];
     if (msg) {
       try { await editBlocks(msg.chat.id, msg.message_id, blocks); }
       catch (e) {

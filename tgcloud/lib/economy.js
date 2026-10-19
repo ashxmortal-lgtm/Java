@@ -26,6 +26,44 @@ export async function getBalance(telegramId) {
   return row ? row.balance : 0;
 }
 
+/**
+ * Adjust user balance by delta. Never goes below 0.
+ * @param {number} telegramId
+ * @param {number} delta positive or negative
+ * @param {{ allowPartial?: boolean }} [opts] if true and not enough coins on deduct, deduct all remaining
+ * @returns {{ before: number, after: number, applied: number }}
+ */
+export async function adjustBalance(telegramId, delta, opts = {}) {
+  await db.run(sql`INSERT OR IGNORE INTO users (telegram_id, balance) VALUES (${telegramId}, 0)`);
+  const before = await getBalance(telegramId);
+  let applied = delta;
+  if (delta < 0) {
+    if (before + delta < 0) {
+      if (opts.allowPartial) applied = -before;
+      else applied = 0;
+    }
+  }
+  if (applied === 0 && delta !== 0) return { before, after: before, applied: 0 };
+  await db.run(sql`UPDATE users SET balance = balance + ${applied} WHERE telegram_id = ${telegramId}`);
+  // Track study-mode earnings separately when flagged
+  if (opts.study && applied !== 0) {
+    try {
+      await db.run(sql`UPDATE users SET study_coins = COALESCE(study_coins, 0) + ${applied} WHERE telegram_id = ${telegramId}`);
+    } catch (_) { /* column may not exist yet on older DBs */ }
+  }
+  const after = await getBalance(telegramId);
+  return { before, after, applied };
+}
+
+export async function getStudyCoins(telegramId) {
+  try {
+    const row = await db.get(sql`SELECT study_coins AS sc FROM users WHERE telegram_id = ${telegramId}`);
+    return row && row.sc != null ? Number(row.sc) : 0;
+  } catch (_) {
+    return 0;
+  }
+}
+
 export async function claimDaily(id) {
   const today = dayKey(0);
   const yesterday = dayKey(-1);

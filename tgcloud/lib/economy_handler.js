@@ -1,17 +1,18 @@
 // Economy commands + store/level-up buttons, restored from the old handlers.
 // /start /help /claim /balance /inventory /shinobi_store /buy /mission /patrol /ability /addcoins /backup
 import { runBackup, runFullBackup } from "./backup.js";
-import { BotApiError } from 'sdk';
+import { BotApiError, db } from 'sdk';
+import { sql } from 'sdk/db';
 import { api } from './message_api.js';
 import {
   claimDaily, DAILY_XP, DAILY_COINS, DAILY_CHAKRA, BONUS_COINS, BONUS_CHAKRA,
-  SAKURA_COINS, SAKURA_CHAKRA,
+  SAKURA_COINS, SAKURA_CHAKRA, getBalance, adjustBalance,
 } from './economy.js';
-import { render, style, escapeHtml, COIN } from './texts.js';
+import { render, style, escapeHtml, COIN, mention as mentionFn } from './texts.js';
 import { SCREENS, screenText, screenKeyboard, findItem, fmt } from './store.js';
 import { handleBuy } from './buy.js';
 import { purchase } from './purchase.js';
-import { ownedSet, getEquipped, setEquipped } from './rpg/state.js';
+import { ownedSet, getEquipped, setEquipped, equipShinobi, unequipShinobi, getEquippedList } from './rpg/state.js';
 import { sendInventory } from './inventory.js';
 import { addCoins, OWNER_ID } from './admin.js';
 import { runActivity, sweepActivities } from './activities.js';
@@ -24,7 +25,6 @@ import { richOr, editRichOr, storeContent, abilityContent, groupOnlyContent } fr
 import { helpText } from './help.js';
 import { profileText } from './profile.js';
 import { sendWelcome, buildUserHelpBlocks } from './welcome_ui.js';
-
 import {
   handleKill, handleRob, handleProtect, handleByakugan,
   handleCloneCallback, isCloneCallback, handleByakuganCallback, isByakuganCallback,
@@ -60,17 +60,32 @@ function claimBody(r) {
   return s;
 }
 
-// Finished missions/patrols: group reminder + short DM.
+// Finished missions/patrols: group reminder + short DM + claim button.
 async function announceDone() {
   for (const r of await sweepActivities()) {
     const who = { id: r.id, first_name: r.name };
+    const claimKb = {
+      inline_keyboard: [[{
+        text: '🏯 Open Hokage Office',
+        callback_data: `map_loc_hokage:${r.id}`,
+        style: 'success',
+      }]],
+    };
     if (r.chatId && r.chatId < 0) {
       try {
-        await send(r.chatId, { text: render(who, r.reminder), parse_mode: 'HTML' });
+        await send(r.chatId, {
+          text: render(who, r.reminder),
+          parse_mode: 'HTML',
+          reply_markup: claimKb,
+        });
       } catch (e) { console.error(e); }
     }
     try {
-      await send(r.id, { text: render(who, r.dm), parse_mode: 'HTML' });
+      await send(r.id, {
+        text: render(who, r.dm),
+        parse_mode: 'HTML',
+        reply_markup: claimKb,
+      });
     } catch (e) { /* user never started the bot in DM */ }
   }
 }
@@ -80,7 +95,8 @@ const ECONOMY_CMDS = new Set([
   'balance', 'inventory', 'profile', 'claim', 'daily', 'shinobi_store', 'buy',
   'mission', 'patrol', 'map', 'ability', 'abilities', 'addcoins',
   'kill', 'rob', 'protect', 'byakugan', 'mt', 'gift', 'gift_store',
-  'search_tsuna',
+  'search_tsuna', 'transfer', 'leaderboard', 'lb',
+  'equip', 'unequip',
   'hug', 'slap', 'punch', 'pat',
   'xoxo', 'rps', 'games', 'xoxo_stats', 'rps_stats',
 ]);
@@ -220,6 +236,14 @@ export async function handleEconomyCommand(message, ctx) {
         }]] } }
         : {};
       await reply(message, await profileText(user), profileAppButton);
+    } else if (cmd === 'transfer') {
+      await handleTransfer(message, text);
+    } else if (cmd === 'leaderboard' || cmd === 'lb') {
+      await handleLeaderboard(message);
+    } else if (cmd === 'equip') {
+      await handleEquip(message, text);
+    } else if (cmd === 'unequip') {
+      await handleUnequip(message, text);
     }
   } catch (e) {
     console.error(e);
@@ -249,7 +273,17 @@ export async function handleEconomyCallback(cb) {
   const answer = (text, show_alert = false) =>
     api.answerCallbackQuery({ callback_query_id: cb.id, ...(text ? { text, show_alert } : {}) });
 
-  const [kind, a, b] = String(cb.data || '').split(':');
+  const data = String(cb.data || '');
+  // Global leaderboard button
+  if (data === 'lb:global') {
+    await answer();
+    try {
+      await sendGlobalLeaderboard(cb.message ? cb.message.chat.id : cb.from.id);
+    } catch (e) { console.error('[lb:global]', e); }
+    return true;
+  }
+
+  const [kind, a, b] = data.split(':');
   const msg = cb.message;
   const isStore = kind === 'store' && SCREENS.includes(a);
   const isLv = kind === 'lv' && (a === 'up' || a === 'ab');
@@ -336,3 +370,161 @@ export async function handleEconomyCallback(cb) {
   await answer();
   return true;
 }
+
+
+
+async function handleTransfer(message, text) {
+  const user = message.from;
+  const chat = message.chat;
+  if (chat.type !== 'group' && chat.type !== 'supergroup') {
+    await reply(message, 'Use /transfer in a group by replying to the receiver.');
+    return;
+  }
+  const replied = message.reply_to_message?.from;
+  if (!replied || replied.is_bot) {
+    await reply(message, "Reply to a user's message: /transfer <amount>");
+    return;
+  }
+  if (replied.id === user.id) {
+    await reply(message, 'You cannot transfer to yourself.');
+    return;
+  }
+  const args = text.trim().split(/\s+/).slice(1);
+  const amountRaw = args[0];
+  if (!amountRaw || !/^\d{1,9}$/.test(amountRaw) || Number(amountRaw) <= 0) {
+    await reply(message, 'Usage: reply to user then /transfer <amount>');
+    return;
+  }
+  const amount = Number(amountRaw);
+  const bal = await getBalance(user.id);
+  if (bal < amount) {
+    await reply(message, `Not enough coins. You have ${fmt(bal)} 🍥.`);
+    return;
+  }
+  await adjustBalance(user.id, -amount);
+  await adjustBalance(replied.id, amount);
+  const grpName = chat.title || 'group';
+  await reply(message, `✅ Transferred ${fmt(amount)} 🍥 to ${mentionFn(replied)}.`);
+  try {
+    await api.sendMessage({
+      chat_id: replied.id,
+      text: style(`${mentionFn(user)} transferred ${fmt(amount)} 🍥 in ${escapeHtml(grpName)}\nUse: /balance to check`),
+      parse_mode: 'HTML',
+    });
+  } catch (_) {}
+  try {
+    await api.sendMessage({
+      chat_id: user.id,
+      text: style(`${mentionFn(user)}, ${fmt(amount)} 🍥 deducted from your account.\nYou transferred konoha coins to ${mentionFn(replied)} in ${escapeHtml(grpName)}`),
+      parse_mode: 'HTML',
+    });
+  } catch (_) {}
+}
+
+async function handleLeaderboard(message) {
+  const chat = message.chat;
+  const isGroup = chat.type === 'group' || chat.type === 'supergroup';
+  if (isGroup) {
+    const rows = await db.all(sql`
+      SELECT u.telegram_id AS id, u.username, u.first_name, u.balance
+      FROM group_members g
+      JOIN users u ON u.telegram_id = g.telegram_id
+      WHERE g.chat_id = ${chat.id}
+      ORDER BY u.balance DESC
+      LIMIT 10
+    `);
+    let body = `🏆 <b>Group Leaderboard</b>\n\n`;
+    if (!rows || !rows.length) body += 'No data yet.';
+    else {
+      rows.forEach((r, i) => {
+        const name = r.username ? `@${r.username}` : (r.first_name || r.id);
+        body += `${i + 1}. ${escapeHtml(String(name))} — ${fmt(r.balance)} 🍥\n`;
+      });
+    }
+    await send(message.chat.id, {
+      text: style(body),
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [[{ text: 'Global leaderboard', callback_data: 'lb:global', style: 'primary' }]],
+      },
+    });
+  } else {
+    await sendGlobalLeaderboard(message.chat.id);
+  }
+}
+
+async function sendGlobalLeaderboard(chatId) {
+  const rows = await db.all(sql`
+    SELECT telegram_id AS id, username, first_name, balance
+    FROM users
+    ORDER BY balance DESC
+    LIMIT 10
+  `);
+  let body = `🌍 <b>Global Leaderboard</b>\n\n`;
+  if (!rows || !rows.length) body += 'No data yet.';
+  else {
+    rows.forEach((r, i) => {
+      const name = r.username ? `@${r.username}` : (r.first_name || r.id);
+      body += `${i + 1}. ${escapeHtml(String(name))} — ${fmt(r.balance)} 🍥\n`;
+    });
+  }
+  await send(chatId, { text: style(body), parse_mode: 'HTML' });
+}
+
+
+
+async function handleEquip(message, text) {
+  const args = text.trim().split(/\s+/).slice(1).join(' ').trim();
+  if (!args) {
+    await reply(message, 'Usage: /equip &lt;shinobi name&gt;\nExample: /equip Naruto\nMax 3 equipped. Check /inventory');
+    return;
+  }
+  const r = await equipShinobi(message.from.id, args);
+  if (r.code === 'not_owned') {
+    await reply(message, `You don't own <b>${escapeHtml(args)}</b>. Recruit at /shinobi_store\n\nCheck /inventory`);
+    return;
+  }
+  if (r.code === 'already') {
+    await reply(message, `<b>${escapeHtml(args)}</b> is already equipped.\n\nEquipped: ${(r.list || []).map(escapeHtml).join(', ') || 'none'}\nCheck /inventory`);
+    return;
+  }
+  if (r.code === 'full') {
+    await reply(message, `Max 3 shinobi equipped.\nCurrently: ${(r.list || []).map(escapeHtml).join(', ')}\nUse /unequip &lt;name&gt; first.\n\nCheck /inventory`);
+    return;
+  }
+  if (!r.ok) {
+    await reply(message, `Could not equip. Try /equip Naruto\n\nCheck /inventory`);
+    return;
+  }
+  await reply(message,
+    `✅ <b>${escapeHtml(args)}</b> equipped!\n` +
+    `Active + passive skills apply.\n` +
+    `Equipped (${r.list.length}/3): ${r.list.map(escapeHtml).join(', ')}\n\n` +
+    `Check /inventory`);
+}
+
+async function handleUnequip(message, text) {
+  const args = text.trim().split(/\s+/).slice(1).join(' ').trim();
+  if (!args) {
+    await reply(message, 'Usage: /unequip &lt;shinobi name&gt;\nExample: /unequip Sasuke\n\nCheck /inventory');
+    return;
+  }
+  const r = await unequipShinobi(message.from.id, args);
+  if (r.code === 'not_equipped') {
+    await reply(message, `<b>${escapeHtml(args)}</b> is not equipped.\n\nCheck /inventory`);
+    return;
+  }
+  if (!r.ok) {
+    await reply(message, `Could not unequip.\n\nCheck /inventory`);
+    return;
+  }
+  const list = r.list || [];
+  await reply(message,
+    `✅ <b>${escapeHtml(args)}</b> unequipped.\n` +
+    (list.length
+      ? `Still equipped (${list.length}/3): ${list.map(escapeHtml).join(', ')}`
+      : 'No shinobi equipped now.') +
+    `\n\nCheck /inventory`);
+}
+
+export { sendGlobalLeaderboard };

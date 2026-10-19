@@ -36,6 +36,11 @@ export const COMMANDS = [
   { cmd: '/todo', desc: 'Study todos', access: 'user' },
   { cmd: '/duel', desc: 'Study duel', access: 'user' },
   { cmd: '/report', desc: 'Study report', access: 'user' },
+  { cmd: '/transfer', desc: 'Transfer coins to a user (reply in group)', access: 'user' },
+  { cmd: '/leaderboard', desc: 'Top balances (alias /lb)', access: 'user' },
+  { cmd: '/lb', desc: 'Top balances (alias /leaderboard)', access: 'user' },
+  { cmd: '/equip', desc: 'Equip a shinobi (max 3)', access: 'user' },
+  { cmd: '/unequip', desc: 'Unequip a shinobi', access: 'user' },
   // admin (registered via /imfrozen)
   { cmd: '/imfrozen', desc: 'Register as bot admin of this group', access: 'admin' },
   { cmd: '/eco', desc: 'Lock/unlock economy in this group (/eco on|off)', access: 'admin' },

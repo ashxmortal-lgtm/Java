@@ -7,7 +7,7 @@ import { fmt } from './store.js';
 import { mention, style } from './texts.js';
 import { rankOf } from './activities.js';
 import { botAvatarDataUri } from './bot_avatar.js';
-import { getEquipped, getShinobiState, isDead } from './rpg/state.js';
+import { getEquippedList, getEquipped, getShinobiState, isDead } from './rpg/state.js';
 import { dueText } from './rpg/time.js';
 
 const EMO = {
@@ -87,12 +87,27 @@ export async function profileData(user) {
   let botAvatar = '';
   try { botAvatar = await botAvatarDataUri(); } catch (_) { /* optional */ }
 
+  let equippedList = [];
+  try {
+    const { getEquippedList } = await import('./rpg/state.js');
+    equippedList = await getEquippedList(id);
+  } catch (_) {}
+  let globalRank = 1;
+  try {
+    const gr = await db.get(sql`
+      SELECT COUNT(*) AS n FROM users WHERE xp > ${xp}
+    `);
+    globalRank = (gr ? Number(gr.n) : 0) + 1;
+  } catch (_) {}
+
   return {
     life,
     botAvatar,
     displayName: [user.first_name, user.last_name].filter(Boolean).join(' ') || 'Shinobi',
     username: user.username || '',
     rank: rank[1],
+    globalRank,
+    equippedList,
     xp,
     xpText: progress,
     balance: bal,
