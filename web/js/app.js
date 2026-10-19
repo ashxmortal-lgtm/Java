@@ -757,6 +757,9 @@
     if (want === 'tracker') {
       state.stack = ['home', 'study'];
       state.page = 'tracker';
+    } else if (want === 'store') {
+      state.stack = ['home', 'game'];
+      state.page = 'store';
     }
   }
 

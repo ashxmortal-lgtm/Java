@@ -3,7 +3,7 @@
  */
 
 function btn(text, data) {
-  return { text, callback_data: data };
+  return { text, callback_data: data, style: 'transparent' };
 }
 
 /** Embed user_id so only the opener can press the button. */

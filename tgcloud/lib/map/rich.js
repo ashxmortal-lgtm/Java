@@ -23,9 +23,9 @@ export function richBtn(text, data, btnStyle = null) {
 }
 
 function richButton(button) {
-  if (button?.callback_data != null) return richBtn(button.text, button.callback_data, button.style || null);
+  if (button?.callback_data != null) return richBtn(button.text, button.callback_data, button.style || 'transparent');
   if (button?.url) {
-    const styleAttr = button.style ? ` style="${button.style}"` : '';
+    const styleAttr = ` style="${button.style || 'transparent'}"`;
     return `<tg-button type="url"${styleAttr} url="${escapeHtml(button.url)}">${escapeHtml(button.text)}</tg-button>`;
   }
   return '';

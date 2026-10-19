@@ -1,4 +1,5 @@
 import { style } from './texts.js';
+import { MINI_APP_STORE_URL } from './config.js';
 // To add a new item later: add one line to SHINOBI or JUTSU.
 export const SHINOBI = [
   { name: 'Sasuke', emoji: '⚔️', price: 1500 },
@@ -40,11 +41,11 @@ function line(item) {
 const FOOTER =
   `\n\n───────────────\n` +
   `🛒 /buy [ɪᴛᴇᴍ ɴᴀᴍᴇ]\n\n` +
-  `ᴛᴀᴘ ᴀɴ ɪᴛᴇᴍ ɴᴀᴍᴇ ᴛᴏ ᴄᴏᴘʏ ɪᴛ.`;
+  `ᴛᴀᴘ ᴀɴ ɪᴛᴇᴍ ɴᴀᴍᴇ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏᴘʏ ɪᴛ.`;
 
 export const SCREENS = ['main', 'jutsu', 'chakra'];
 
-export function screenText(screen) {
+export function screenText(screen, balance = null) {
   if (screen === 'jutsu') {
     return (
       `<b>🌀 𝐉𝐔𝐓𝐒𝐔</b>\n\n` +
@@ -59,27 +60,52 @@ export function screenText(screen) {
       FOOTER
     );
   }
-  // Larger heading + pull-quote list for shinobi
+  const balanceLine = balance == null ? '' : `🍥 Balance: ${fmt(balance)}\n\n`;
   return (
     `<b>🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄</b>\n` +
     `<i>ʀᴇᴄʀᴜɪᴛ ʏᴏᴜʀ ɴᴇxᴛ ꜱʜɪɴᴏʙɪ</i>\n\n` +
+    balanceLine +
     `<b>⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈</b>\n\n` +
     `<blockquote>${SHINOBI.map(line).join('\n')}</blockquote>` +
     FOOTER
   );
 }
 
-export function screenKeyboard(screen, ownerId) {
+function copyRows(names) {
+  const buttons = names.map((name) => ({
+    text: style(name),
+    copy_text: { text: name },
+    style: 'transparent',
+  }));
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) rows.push(buttons.slice(i, i + 2));
+  return rows;
+}
+
+export function screenKeyboard(screen, ownerId, options = {}) {
   const cb = (s) => `store:${s}:${ownerId}`;
+  const { includeMiniApp = false, fromMap = false } = options;
+  const navStyle = fromMap ? 'transparent' : 'primary';
   if (screen === 'main') {
-    return {
-      inline_keyboard: [[
-        { text: style('Jutsu'), callback_data: cb('jutsu') },
-        { text: style('Chakra'), callback_data: cb('chakra') },
-      ]],
-    };
+    const rows = copyRows(SHINOBI.map((item) => item.name));
+    rows.push([
+      { text: style('Jutsu'), callback_data: cb('jutsu'), style: navStyle },
+      { text: style('Chakra'), callback_data: cb('chakra'), style: navStyle },
+    ]);
+    if (includeMiniApp) {
+      rows.push([{
+        text: style('Buy in Mini App'),
+        web_app: { url: MINI_APP_STORE_URL },
+        style: 'success',
+      }]);
+    }
+    return { inline_keyboard: rows };
   }
+  const names = screen === 'jutsu' ? JUTSU.map((item) => item.name) : ['Chakra'];
   return {
-    inline_keyboard: [[{ text: style('Back'), callback_data: cb('main') }]],
+    inline_keyboard: [
+      ...copyRows(names),
+      [{ text: style('Back'), callback_data: cb('main'), style: navStyle }],
+    ],
   };
 }

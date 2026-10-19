@@ -18,19 +18,21 @@ const BUTTON_ACTION_FIELDS = new Set([
 ]);
 const TEXT_TYPES_TO_PRESERVE = new Set([
   'code', 'pre', 'url', 'text_link', 'text_url', 'text_mention',
+  'copy_text',
 ]);
 const BUTTON_STYLES = new Set(['primary', 'success', 'danger']);
 
 function styleRichHtml(html) {
-  return style(html).replace(/<tg-button\b([^>]*)>([\s\S]*?)<\/tg-button>/gi, (_tag, attrs, content) => {
+  return style(html).replace(/<tg-button(?=\s|>)([^>]*)>([\s\S]*?)<\/tg-button>/gi, (_tag, attrs, content) => {
     const label = content.replace(/<[^>]*>/g, '').trim();
     if (isFrozenBloodedLabel(label)) {
       const safeAttrs = attrs.replace(/\s+(?:type|url|data|style)\s*=\s*("[^"]*"|'[^']*')/gi, '');
       return `<tg-button${safeAttrs} type="url" url="${FROZEN_BLOODED_URL}" style="danger">${FROZEN_BLOODED_TEXT}</tg-button>`;
     }
     const requestedStyle = attrs.match(/\sstyle\s*=\s*(["'])(.*?)\1/i)?.[2]?.toLowerCase();
+    const callbackData = attrs.match(/\sdata\s*=\s*(["'])(.*?)\1/i)?.[2] || '';
     const withoutExistingStyle = attrs.replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, '');
-    if (requestedStyle === 'transparent') {
+    if (requestedStyle === 'transparent' || callbackData.startsWith('map_')) {
       return `<tg-button${withoutExistingStyle}>${content}</tg-button>`;
     }
     const richStyles = new Set(['primary', 'success', 'danger', 'link']);
@@ -63,12 +65,14 @@ function transform(value, key = '', parentType = '', inButtonList = false) {
 
   const type = typeof value.type === 'string' ? value.type : parentType;
   const buttonList = inButtonList || BUTTON_LIST_FIELDS.has(key);
-  const button = typeof value.text === 'string'
+  const mapButton = typeof value.callback_data === 'string' && value.callback_data.startsWith('map_');
+  const button = type !== 'copy_text' && typeof value.text === 'string'
     && (buttonList || (!TEXT_TYPES_TO_PRESERVE.has(type)
       && [...BUTTON_ACTION_FIELDS].some((field) => field in value)));
   const result = {};
   for (const [childKey, childValue] of Object.entries(value)) {
-    result[childKey] = transform(childValue, childKey, type, buttonList);
+    const childType = childKey === 'copy_text' ? 'copy_text' : type;
+    result[childKey] = transform(childValue, childKey, childType, buttonList);
   }
   if (button) {
     if (isFrozenBloodedLabel(value.text)) {
@@ -78,7 +82,7 @@ function transform(value, key = '', parentType = '', inButtonList = false) {
       result.style = 'danger';
     } else {
       result.text = style(value.text);
-      if (value.style === 'transparent') delete result.style;
+      if (value.style === 'transparent' || mapButton) delete result.style;
       else if (BUTTON_STYLES.has(value.style)) result.style = value.style;
       else result.style = 'primary';
     }

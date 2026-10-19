@@ -77,11 +77,17 @@ export async function buildInventoryBlocks(user) {
     const status = await collectStatus(uid);
     const byName = Object.fromEntries(status.rows.map((r) => [r.name, r]));
     const tableRows = [['Name', 'Status', 'Returns']];
+    const deadRows = status.rows.filter((r) => r.primary?.key === 'dead');
     for (const s of shinobi) {
+      if (byName[s.itemName]?.primary?.key === 'dead') continue;
       const part = byName[s.itemName]
         ? statusParts(byName[s.itemName])
         : { name: s.itemName, status: 'ready', returns: '—' };
       tableRows.push([part.name, part.status, part.returns]);
+    }
+    if (deadRows.length) {
+      const reviveAt = Math.max(...deadRows.map((r) => Number(r.primary.dueAt) || 0));
+      tableRows.push(['You', 'dead', dueText(reviveAt, status.now)]);
     }
     blocks.push(table(tableRows));
   } else {
@@ -94,9 +100,9 @@ export async function buildInventoryBlocks(user) {
   try {
     const eqList = await getEquippedList(uid);
     if (eqList.length) {
-      blocks.push(para(`👤 EQUIPPED (${eqList.length}/3): ${eqList.join(', ')}`));
+      blocks.push(quoteLines([`👤 EQUIPPED (${eqList.length}/3): ${eqList.join(', ')}`]));
     } else {
-      blocks.push(para('👤 EQUIPPED: none — use /equip &lt;name&gt;'));
+      blocks.push(quoteLines(['👤 EQUIPPED: none — use /equip &lt;name&gt;']));
     }
   } catch (_) {
     blocks.push(para('👤 EQUIPPED: —'));
@@ -104,11 +110,11 @@ export async function buildInventoryBlocks(user) {
   blocks.push(para(style('❄️ Your shinobi are making progress! Return when their timers finish and continue your journey.')));
   blocks.push(row(
     cb("🌸 Sakura's Healing", 'inv:sakura', 'success'),
-    cb("🐌 Katsuyu's Healing", 'inv:katsuyu', 'primary'),
+    cb("🐌 Katsuyu's Healing", 'inv:katsuyu', 'transparent'),
   ));
   blocks.push(row(
-    cb('🌀 Jutsu', 'inv:jutsu', 'primary'),
-    cb('owned ❄️ gifts', 'inv:gifts', 'primary'),
+    cb('🌀 Jutsu', 'inv:jutsu', 'transparent'),
+    cb('owned ❄️ gifts', 'inv:gifts', 'transparent'),
   ));
   return blocks;
 }
@@ -126,7 +132,7 @@ export async function buildOwnedGiftsBlocks(user) {
   return [
     para(mention(user), "'s GIFTS"),
     quoteLines(lines),
-    row(cb('← Back', 'inv:home', 'primary')),
+    row(cb('← Back', 'inv:home', 'transparent')),
   ];
 }
 
@@ -144,7 +150,7 @@ export async function buildJutsuBlocks(user) {
   return [
     para(mention(user), "'s JUTSU"),
     quoteLines(lines),
-    row(cb('← Back', 'inv:home', 'primary')),
+    row(cb('← Back', 'inv:home', 'transparent')),
   ];
 }
 
@@ -174,7 +180,7 @@ export async function sendInventory(chatId, user) {
       chat_id: chatId,
       text: await inventoryText(user.id),
       reply_markup: {
-        inline_keyboard: [[{ text: '🌀 Jutsu', callback_data: 'inv:jutsu' }]],
+        inline_keyboard: [[{ text: '🌀 Jutsu', callback_data: 'inv:jutsu', style: 'transparent' }]],
       },
     });
   }
@@ -210,7 +216,7 @@ async function buildRestoreBlocks(user, result, timers) {
   const buttons = timers.map((t) => cb(
     `${t.kind === 'exhaustion' ? '🔥' : '⏳'} ${t.shinobi}`,
     `inv:kr:${t.kind}:${t.shinobi}:${result.healKey}`,
-    'primary',
+    'transparent',
   ));
   const rows = [];
   for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));

@@ -55,6 +55,19 @@
     target.append(section);
   }
 
+  function renderBotAvatar(src) {
+    const target = document.getElementById('profile-bot-avatar');
+    if (!target) return;
+    target.replaceChildren(element('span', 'avatar-fallback', '❄️'));
+    if (typeof src !== 'string' || !src.startsWith('data:image/')) return;
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    img.src = src;
+    img.addEventListener('error', () => { img.style.display = 'none'; });
+    target.prepend(img);
+  }
+
   function renderProfile(profile) {
     if (!profile || typeof profile !== 'object' ||
         !Array.isArray(profile.roster) || !Array.isArray(profile.jutsu) ||
@@ -63,6 +76,7 @@
     }
 
     content.replaceChildren();
+    renderBotAvatar(profile.botAvatar);
     const identity = element('section', 'profile-identity');
     // User profile photo (Telegram) with initial fallback
     const avatar = element('div', 'avatar');
