@@ -15,24 +15,27 @@ function allButtons(markup) {
   return markup.inline_keyboard.flat();
 }
 
-test('Shinobi Store exposes exact copy buttons and the private Mini App launch URL', () => {
+test('Shinobi Store lists items and launches direct purchases in the Mini App', () => {
   const main = screenKeyboard('main', 123, { includeMiniApp: true });
   const buttons = allButtons(main);
+  const mainText = screenText('main', 1800);
   for (const name of ['Sasuke', 'Sakura', 'Naruto', 'Itachi', 'Hinata']) {
-    assert(buttons.some((button) => button.copy_text?.text === name), `${name} must be copyable`);
+    assert(mainText.includes(name), `${name} must appear in the bot store`);
   }
+  assert.equal(buttons.filter((button) => button.copy_text).length, 0, 'the bot store must not copy purchase commands');
   const launch = buttons.find((button) => button.web_app?.url);
   assert.equal(launch?.web_app?.url, 'https://app8868570312.tgcloud.ai/?page=store');
 
-  const jutsu = allButtons(screenKeyboard('jutsu', 123));
-  assert(jutsu.some((button) => button.copy_text?.text === 'Mind Transmission Jutsu'));
-  const chakra = allButtons(screenKeyboard('chakra', 123));
-  assert(chakra.some((button) => button.copy_text?.text === 'Chakra'));
-  assert.match(screenText('main', 1800), /Balance: 1,800/);
+  assert.match(screenText('jutsu'), /Mind Transmission Jutsu/);
+  assert.match(screenText('chakra'), /Chakra/);
+  assert.match(mainText, /Balance: 1,800/);
 
   const rich = read('tgcloud', 'lib', 'rich.js');
-  assert.match(rich, /copyRows\(SHINOBI\.map/);
-  assert.doesNotMatch(rich, /btn\(`Buy \$\{i\.name\}`/);
+  assert.match(rich, /Buy in Mini App/);
+  assert.match(rich, /web_app:\s*\{\s*url: MINI_APP_STORE_URL/);
+  const app = read('web', 'js', 'app.js');
+  assert.match(app, /data-confirm-buy=/);
+  assert.match(app, /action: 'purchase', itemName: name/);
 });
 
 test('copy_text content is not altered by font styling and transparent controls stay uncolored', () => {
@@ -97,19 +100,21 @@ test('Mini App store deep link, profile avatar, and removed /profile launcher ar
   assert.match(read('web', 'profile.html'), /id="profile-bot-avatar"/);
   const economy = read('tgcloud', 'lib', 'economy_handler.js');
   assert.doesNotMatch(economy, /Open Profile Mini App|profileAppButton/);
-  assert.match(economy, /screenKeyboard\('main', user\.id, \{ includeMiniApp: true \}\)/);
+  assert.match(economy, /const isPrivate = message\.chat\.type === 'private'/);
+  assert.match(economy, /screenKeyboard\('main',\s*user\.id,\s*\{\s*includeMiniApp:\s*isPrivate\s*\}\)/);
 });
 
-test('leaderboards use clickable mentions and transfer DMs use a group permalink helper', () => {
+test('leaderboards render rich tables and transfer DMs use a group permalink helper', () => {
   const economy = read('tgcloud', 'lib', 'economy_handler.js');
-  assert.equal((economy.match(/mentionFn\(\{ id: r\.id/g) || []).length, 2);
+  assert.equal((economy.match(/table\(tableRows\)/g) || []).length, 2);
   assert.match(economy, /groupChatLink\(chat, message\.message_id\)/);
   assert.match(economy, /to \$\{mentionFn\(replied\)\} in \$\{grpName\}/);
 });
 
 test('inventory death is shown as user status, equipped shinobi are quoted, and blue controls are transparent', () => {
   const inventory = read('tgcloud', 'lib', 'inventory.js');
-  assert.match(inventory, /tableRows\.push\(\['You', 'dead'/);
+  assert.match(inventory, /blocks\.push\(para\(`Status: ☠️ dead/);
+  assert.match(inventory, /tableRows\.push\(\[part\.name, part\.status, part\.returns\]\)/);
   assert.match(inventory, /quoteLines\(\[`👤 EQUIPPED/);
   assert.doesNotMatch(inventory, /'primary'/);
   const profile = read('tgcloud', 'lib', 'profile.js');
@@ -119,7 +124,8 @@ test('inventory death is shown as user status, equipped shinobi are quoted, and 
 test('Study button stays on the stats view and Study Hub no longer has the external footer', () => {
   const welcome = read('tgcloud', 'lib', 'welcome_ui.js');
   assert.match(welcome, /buildStudyStatsBlocks\(cq\.from\)/);
-  assert.match(welcome, /plainStudyStats\(stats\)/);
+  assert.match(welcome, /await editTo\(cq, stats\)/);
+  assert.match(welcome, /Use: \/study to open study hub/);
   assert.doesNotMatch(welcome, /handleStudyHub/);
   const hub = read('tgcloud', 'lib', 'study', 'hub.js');
   assert.doesNotMatch(hub, /SHEESH/);
