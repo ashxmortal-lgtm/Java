@@ -7,7 +7,6 @@ import { SHINOBI, JUTSU, CHAKRA_RATE, boldNum, fmt } from './store.js';
 import { OWNER_ID } from './admin.js';
 import { send, sendRich } from './chat.js';
 import { getEquipped, getAllShinobiState } from './rpg/state.js';
-import { MINI_APP_STORE_URL } from './config.js';
 
 // ---- block shapes (the only place to fix if Telegram rejects one) ----
 const S = (t) => style(t);
@@ -68,10 +67,18 @@ export async function editRichOr(msg, user, content, classic) {
 }
 
 // ---- screens ----
+const item = (i) => P([S('✦ '), code(i.name), S(` ${i.emoji} : `), `${boldNum(i.price)} 🍥`]);
 const footer = () => [
   P('───────────────'),
   P('🛒 /buy [item name]'),
+  P('tap an item name to copy it.'),
 ];
+const copyRows = (names) => {
+  const buttons = names.map((name) => btn(name, { copy_text: { text: name }, style: 'transparent' }));
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  return rows;
+};
 
 // Short skill notes — only skills already defined in the game.
 const SKILL_NOTES = {
@@ -83,56 +90,49 @@ const SKILL_NOTES = {
 };
 
 /**
- * Shinobi Store — rich table for items/prices, no copy buttons.
- * Async — callers must await it.
+ * Shinobi Store with live balance and exact copy-text controls. Async — callers must await it.
  */
 export async function storeContent(screen, ownerId, options = {}) {
   const cb = (s) => ({
     callback_data: `store:${s}:${ownerId}`,
-    style: options.fromMap ? 'transparent' : 'primary',
+    ...(options.fromMap ? { style: 'transparent' } : {}),
   });
   if (screen === 'jutsu') {
-    const rows = [['Item', 'Price']];
-    for (const i of JUTSU) rows.push([`${i.emoji} ${i.name}`, `${fmt(i.price)} 🍥`]);
     return [
-      P('🌀 𝐉𝐔𝐓𝐒𝐔'),
-      table(rows),
-      ...footer(),
-      row(btn('Back', cb('main'))),
+      P('🌀 𝐉𝐔𝐓𝐒𝐔'), jutsuQuote(), ...copyRows(JUTSU.map((item) => item.name)), ...footer(), row(btn('Back', cb('main'))),
     ];
   }
   if (screen === 'chakra') {
-    const rows = [['Item', 'Price'], ['⚡ Chakra × 100', `${fmt(100 * CHAKRA_RATE)} 🍥`]];
     return [
       P('⚡ 𝐂𝐇𝐀𝐊𝐑𝐀'),
-      table(rows),
-      ...footer(),
-      row(btn('Back', cb('main'))),
+      quote(`✦ Chakra × 100 : ${boldNum(100 * CHAKRA_RATE)} 🍥`),
+      ...copyRows(['Chakra']),
+      ...footer(), row(btn('Back', cb('main'))),
     ];
   }
 
   const balRow = await db.get(sql`SELECT balance FROM users WHERE telegram_id = ${ownerId}`);
   const balance = balRow ? balRow.balance : 0;
-  const rows = [['Item', 'Price']];
-  for (const i of SHINOBI) rows.push([`${i.emoji} ${i.name}`, `${fmt(i.price)} 🍥`]);
-
-  const buttons = [
-    row(btn('Jutsu', cb('jutsu')), btn('Chakra', cb('chakra'))),
-  ];
-  if (options.includeMiniApp) {
-    buttons.push(row(btn('Buy in Mini App', { web_app: { url: MINI_APP_STORE_URL }, style: 'success' })));
-  }
+  const lines = SHINOBI.map((i) => `✦ <b>${escapeHtml(i.name)}</b> ${i.emoji} : ${boldNum(i.price)} 🍥`);
 
   return [
     P('🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄'),
     P('ʀᴇᴄʀᴜɪᴛ ʏᴏᴜʀ ɴᴇxᴛ ꜱʜɪɴᴏʙɪ'),
     P(`🍥 Balance: ${fmt(balance)}`),
     P('⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈'),
-    table(rows),
+    quote(lines.join('\n')),
     P('Use /equip &lt;name&gt; · /unequip &lt;name&gt; (max 3 equipped)'),
+    ...copyRows(SHINOBI.map((item) => item.name)),
     ...footer(),
-    ...buttons,
+    row(btn('Jutsu', cb('jutsu')), btn('Chakra', cb('chakra'))),
   ];
+}
+
+function shinobiQuote() {
+  return quote(SHINOBI.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
+}
+function jutsuQuote() {
+  return quote(JUTSU.map((i) => `✦ ${i.name} ${i.emoji} : ${boldNum(i.price)} 🍥`).join('\n'));
 }
 
 export function abilityContent(_ownerId, opts = {}) {

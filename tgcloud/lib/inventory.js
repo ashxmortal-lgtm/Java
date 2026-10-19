@@ -76,20 +76,18 @@ export async function buildInventoryBlocks(user) {
   if (shinobi.length) {
     const status = await collectStatus(uid);
     const byName = Object.fromEntries(status.rows.map((r) => [r.name, r]));
-    const deadRows = status.rows.filter((r) => r.primary?.key === 'dead');
-    // Overall player status above the table
-    if (deadRows.length) {
-      const reviveAt = Math.max(...deadRows.map((r) => Number(r.primary.dueAt) || 0));
-      blocks.push(para(`Status: ☠️ dead (${dueText(reviveAt, status.now)})`));
-    } else {
-      blocks.push(para('Status: ✅ alive'));
-    }
     const tableRows = [['Name', 'Status', 'Returns']];
+    const deadRows = status.rows.filter((r) => r.primary?.key === 'dead');
     for (const s of shinobi) {
+      if (byName[s.itemName]?.primary?.key === 'dead') continue;
       const part = byName[s.itemName]
         ? statusParts(byName[s.itemName])
         : { name: s.itemName, status: 'ready', returns: '—' };
       tableRows.push([part.name, part.status, part.returns]);
+    }
+    if (deadRows.length) {
+      const reviveAt = Math.max(...deadRows.map((r) => Number(r.primary.dueAt) || 0));
+      tableRows.push(['You', 'dead', dueText(reviveAt, status.now)]);
     }
     blocks.push(table(tableRows));
   } else {
@@ -112,7 +110,7 @@ export async function buildInventoryBlocks(user) {
   blocks.push(para(style('❄️ Your shinobi are making progress! Return when their timers finish and continue your journey.')));
   blocks.push(row(
     cb("🌸 Sakura's Healing", 'inv:sakura', 'success'),
-    cb("🐌 Katsuyu's Healing", 'inv:katsuyu', 'success'),
+    cb("🐌 Katsuyu's Healing", 'inv:katsuyu', 'transparent'),
   ));
   blocks.push(row(
     cb('🌀 Jutsu', 'inv:jutsu', 'transparent'),

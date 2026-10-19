@@ -112,7 +112,7 @@ export async function buildStudyStatsBlocks(user) {
 
   return [
     head('📚 𝐒𝐓𝐔𝐃𝐘 𝐒𝐓𝐀𝐓𝐒'),
-    para('🥷🏼: ', mention(user)),
+    para('🥷🏼 ', mention(user)),
     divider,
     para(`Revised chapters: ${revised}`),
     para(`Practiced chapters: ${practiced}`),
@@ -122,6 +122,7 @@ export async function buildStudyStatsBlocks(user) {
     para(`Completed chapters: ${completedChapters}`),
     para('(Including revision, practice & pyq all done per chap)'),
     divider,
+    para(mention(user), ' your all time study stats.'),
     para('Use: /study to open study hub'),
   ];
 }
