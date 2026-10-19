@@ -21,7 +21,7 @@ import { balanceText, trackGroup } from './balance.js';
 import { abilityText, abilityKeyboard, backKeyboard } from './ability.js';
 import { levelsText, levelsContent } from './levels.js';
 import { economyLocked, ECO_LOCKED_TEXT } from './groupadmin.js';
-import { richOr, editRichOr, storeContent, abilityContent, groupOnlyContent } from './rich.js';
+import { richOr, editRichOr, storeContent, abilityContent, groupOnlyContent, table } from './rich.js';
 import { helpText } from './help.js';
 import { profileText } from './profile.js';
 import { sendWelcome, buildUserHelpBlocks } from './welcome_ui.js';
@@ -97,7 +97,7 @@ const ECONOMY_CMDS = new Set([
   'mission', 'patrol', 'map', 'ability', 'abilities', 'addcoins',
   'kill', 'rob', 'protect', 'byakugan', 'mt', 'gift', 'gift_store',
   'search_tsuna', 'transfer', 'leaderboard', 'lb',
-  'equip', 'unequip',
+  'equip', 'unequip', 'redeem',
   'hug', 'slap', 'punch', 'pat',
   'xoxo', 'rps', 'games', 'xoxo_stats', 'rps_stats',
 ]);
@@ -172,14 +172,16 @@ export async function handleEconomyCommand(message, ctx) {
       await richOr(message.chat.id, user, abilityContent(user.id), () =>
         reply(message, abilityText(), { reply_markup: abilityKeyboard(user.id) }));
     } else if (cmd === 'shinobi_store') {
-      if (message.chat.type === 'private') {
-        await reply(message, screenText('main', await getBalance(user.id)), {
-          reply_markup: screenKeyboard('main', user.id, { includeMiniApp: true }),
-        });
-      } else {
-        await richOr(message.chat.id, user, await storeContent('main', user.id), () =>
-          reply(message, screenText('main'), { reply_markup: screenKeyboard('main', user.id) }));
-      }
+      const isPrivate = message.chat.type === 'private';
+      const bal = isPrivate ? await getBalance(user.id) : null;
+      await richOr(
+        message.chat.id,
+        user,
+        await storeContent('main', user.id, { includeMiniApp: isPrivate }),
+        () => reply(message, screenText('main', bal), {
+          reply_markup: screenKeyboard('main', user.id, { includeMiniApp: isPrivate }),
+        }),
+      );
     } else if (cmd === 'mission' || cmd === 'patrol') {
       if (message.chat.type === 'private') {
         await richOr(message.chat.id, user, groupOnlyContent(cmd), () =>
@@ -236,7 +238,7 @@ export async function handleEconomyCommand(message, ctx) {
         parse_mode: 'HTML',
       });
     } else if (cmd === 'profile') {
-      await reply(message, await profileText(user));
+      await reply(message, await profileText(user, message));
     } else if (cmd === 'transfer') {
       await handleTransfer(message, text);
     } else if (cmd === 'leaderboard' || cmd === 'lb') {
@@ -450,21 +452,48 @@ async function handleLeaderboard(message) {
       ORDER BY u.balance DESC
       LIMIT 10
     `);
-    let body = `🏆 <b>Group Leaderboard</b>\n\n`;
-    if (!rows || !rows.length) body += 'No data yet.';
-    else {
+    const tableRows = [['Rank', 'Name', 'Coins']];
+    if (rows && rows.length) {
       rows.forEach((r, i) => {
-        const label = r.username ? `@${r.username}` : (r.first_name || r.id);
-        body += `${i + 1}. ${mentionFn({ id: r.id, first_name: String(label) })} — ${fmt(r.balance)} 🍥\n`;
+        const display = r.username
+          ? `@${r.username}`
+          : (r.first_name || String(r.id));
+        // Group: mention everyone (text_mention works with or without username)
+        tableRows.push([String(i + 1), display, `${fmt(r.balance)} 🍥`]);
+      });
+    } else {
+      tableRows.push(['—', 'No data yet', '—']);
+    }
+    const blocks = [
+      { type: 'heading', text: '🏆 Group Leaderboard', size: 2 },
+      table(tableRows),
+      { type: 'buttons', align: 'center', buttons: [
+        { text: style('Global leaderboard'), callback_data: 'lb:global', style: 'primary' },
+      ]},
+    ];
+    // For group mentions we still want clickable names when possible; use classic fallback with mentions
+    try {
+      await api.sendRichMessage({
+        chat_id: message.chat.id,
+        rich_message: { blocks },
+      });
+    } catch (e) {
+      // Fallback classic with mentions for all
+      let body = `🏆 <b>Group Leaderboard</b>\n\n`;
+      if (!rows || !rows.length) body += 'No data yet.';
+      else {
+        rows.forEach((r, i) => {
+          body += `${i + 1}. ${mentionFn({ id: r.id, first_name: r.first_name || r.username || String(r.id) })} — ${fmt(r.balance)} 🍥\n`;
+        });
+      }
+      await send(message.chat.id, {
+        text: style(body),
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [[{ text: 'Global leaderboard', callback_data: 'lb:global', style: 'primary' }]],
+        },
       });
     }
-    await send(message.chat.id, {
-      text: style(body),
-      parse_mode: 'HTML',
-      reply_markup: {
-        inline_keyboard: [[{ text: 'Global leaderboard', callback_data: 'lb:global', style: 'primary' }]],
-      },
-    });
   } else {
     await sendGlobalLeaderboard(message.chat.id);
   }
@@ -477,15 +506,36 @@ async function sendGlobalLeaderboard(chatId) {
     ORDER BY balance DESC
     LIMIT 10
   `);
-  let body = `🌍 <b>Global Leaderboard</b>\n\n`;
-  if (!rows || !rows.length) body += 'No data yet.';
-  else {
+  const tableRows = [['Rank', 'Name', 'Coins']];
+  if (rows && rows.length) {
     rows.forEach((r, i) => {
-      const label = r.username ? `@${r.username}` : (r.first_name || r.id);
-      body += `${i + 1}. ${mentionFn({ id: r.id, first_name: String(label) })} — ${fmt(r.balance)} 🍥\n`;
+      // Global: plain name; only show @username if set (no forced mention link)
+      const display = r.username ? `@${r.username}` : (r.first_name || String(r.id));
+      tableRows.push([String(i + 1), display, `${fmt(r.balance)} 🍥`]);
     });
+  } else {
+    tableRows.push(['—', 'No data yet', '—']);
   }
-  await send(chatId, { text: style(body), parse_mode: 'HTML' });
+  const blocks = [
+    { type: 'heading', text: '🌍 Global Leaderboard', size: 2 },
+    table(tableRows),
+  ];
+  try {
+    await api.sendRichMessage({
+      chat_id: chatId,
+      rich_message: { blocks },
+    });
+  } catch (e) {
+    let body = `🌍 <b>Global Leaderboard</b>\n\n`;
+    if (!rows || !rows.length) body += 'No data yet.';
+    else {
+      rows.forEach((r, i) => {
+        const label = r.username ? `@${r.username}` : (r.first_name || r.id);
+        body += `${i + 1}. ${label} — ${fmt(r.balance)} 🍥\n`;
+      });
+    }
+    await send(chatId, { text: style(body), parse_mode: 'HTML' });
+  }
 }
 
 
@@ -513,8 +563,9 @@ async function handleEquip(message, text) {
     await reply(message, `Could not equip. Try /equip Naruto\n\nCheck /inventory`);
     return;
   }
+  const shown = (r.list && r.list.find((s) => s.toLowerCase().includes(args.toLowerCase()))) || args;
   await reply(message,
-    `✅ <b>${escapeHtml(args)}</b> equipped!\n` +
+    `✅ <b>${escapeHtml(shown)}</b> equipped!\n` +
     `Active + passive skills apply.\n` +
     `Equipped (${r.list.length}/3): ${r.list.map(escapeHtml).join(', ')}\n\n` +
     `Check /inventory`);
