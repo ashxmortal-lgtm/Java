@@ -180,15 +180,118 @@ export async function isProtected(telegramId, t = now()) {
   return (s.protectedUntil || 0) > t;
 }
 
-// ---- equipped character ----
+// ---- equipped characters (max 3) ----
+// users.equipped remains the primary (first) for kill-target / legacy reads.
+// user_equipped table holds the full list (0–3).
 
-export async function getEquipped(telegramId) {
+const MAX_EQUIPPED = 3;
+
+export async function getEquippedList(telegramId) {
+  try {
+    const rows = await db.all(sql`
+      SELECT shinobi FROM user_equipped
+      WHERE telegram_id = ${telegramId}
+      ORDER BY slot ASC, shinobi ASC
+    `);
+    if (rows && rows.length) return rows.map((r) => r.shinobi);
+  } catch (_) { /* table may not exist yet */ }
+  // Fallback to legacy single column
   const u = await db.get(sql`SELECT equipped FROM users WHERE telegram_id = ${telegramId}`);
-  return (u && u.equipped) || 'Starter Shinobi';
+  if (u && u.equipped) return [u.equipped];
+  return ['Starter Shinobi'];
 }
 
+/** Primary equipped (first slot) — used by kill targeting & life status. */
+export async function getEquipped(telegramId) {
+  const list = await getEquippedList(telegramId);
+  return list[0] || 'Starter Shinobi';
+}
+
+export async function isEquipped(telegramId, shinobi) {
+  const list = await getEquippedList(telegramId);
+  return list.some((s) => s.toLowerCase() === String(shinobi).toLowerCase());
+}
+
+/**
+ * Equip a shinobi into an empty slot (max 3).
+ * @returns {{ ok: boolean, code: string, list?: string[] }}
+ */
+export async function equipShinobi(telegramId, shinobi) {
+  const name = String(shinobi || '').trim();
+  if (!name) return { ok: false, code: 'invalid' };
+  const own = await ownedSet(telegramId);
+  // Starter is always owned
+  if (name !== 'Starter Shinobi' && !own.has(name)) return { ok: false, code: 'not_owned' };
+  const list = await getEquippedList(telegramId);
+  if (list.some((s) => s.toLowerCase() === name.toLowerCase())) {
+    return { ok: false, code: 'already', list };
+  }
+  if (list.length >= MAX_EQUIPPED) return { ok: false, code: 'full', list };
+  const slot = list.length;
+  try {
+    await db.run(sql`
+      INSERT OR IGNORE INTO user_equipped (telegram_id, shinobi, slot)
+      VALUES (${telegramId}, ${name}, ${slot})
+    `);
+  } catch (e) {
+    // Create table on the fly if missing
+    try {
+      await db.run(sql`
+        CREATE TABLE IF NOT EXISTS user_equipped (
+          telegram_id INTEGER NOT NULL,
+          shinobi TEXT NOT NULL,
+          slot INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (telegram_id, shinobi)
+        )
+      `);
+      await db.run(sql`
+        INSERT OR IGNORE INTO user_equipped (telegram_id, shinobi, slot)
+        VALUES (${telegramId}, ${name}, ${slot})
+      `);
+    } catch (e2) {
+      console.error('[equipShinobi]', e2);
+      return { ok: false, code: 'error' };
+    }
+  }
+  // Keep legacy primary column in sync
+  const next = await getEquippedList(telegramId);
+  await db.run(sql`UPDATE users SET equipped = ${next[0] || name} WHERE telegram_id = ${telegramId}`);
+  return { ok: true, code: 'ok', list: next };
+}
+
+/**
+ * Unequip a shinobi.
+ * @returns {{ ok: boolean, code: string, list?: string[] }}
+ */
+export async function unequipShinobi(telegramId, shinobi) {
+  const name = String(shinobi || '').trim();
+  if (!name) return { ok: false, code: 'invalid' };
+  try {
+    const won = await db.run(sql`
+      DELETE FROM user_equipped
+      WHERE telegram_id = ${telegramId} AND shinobi = ${name}
+    `);
+    if (won.rowsAffected === 0) {
+      // Legacy: clear single equipped if matches
+      const cur = await getEquipped(telegramId);
+      if (cur.toLowerCase() === name.toLowerCase()) {
+        await db.run(sql`UPDATE users SET equipped = NULL WHERE telegram_id = ${telegramId}`);
+        return { ok: true, code: 'ok', list: [] };
+      }
+      return { ok: false, code: 'not_equipped' };
+    }
+  } catch (e) {
+    console.error('[unequipShinobi]', e);
+    return { ok: false, code: 'error' };
+  }
+  const next = await getEquippedList(telegramId);
+  await db.run(sql`UPDATE users SET equipped = ${next[0] || null} WHERE telegram_id = ${telegramId}`);
+  return { ok: true, code: 'ok', list: next };
+}
+
+/** @deprecated use equipShinobi */
 export async function setEquipped(telegramId, shinobi) {
-  await db.run(sql`UPDATE users SET equipped = ${shinobi} WHERE telegram_id = ${telegramId}`);
+  return equipShinobi(telegramId, shinobi);
 }
 
 // ---- ownership helpers ----

@@ -64,25 +64,35 @@
 
     content.replaceChildren();
     const identity = element('section', 'profile-identity');
-    // Bot's profile picture (data: URI from the bot); snowflake fallback.
+    // User profile photo (Telegram) with initial fallback
     const avatar = element('div', 'avatar');
-    if (typeof profile.botAvatar === 'string' && profile.botAvatar.indexOf('data:image/') === 0) {
+    let userPhoto = '';
+    try {
+      const u = tg && tg.initDataUnsafe && tg.initDataUnsafe.user;
+      if (u && u.photo_url) userPhoto = u.photo_url;
+    } catch (_) {}
+    if (userPhoto) {
       const img = document.createElement('img');
       img.alt = '';
       img.decoding = 'async';
-      img.src = profile.botAvatar;
+      img.src = userPhoto;
       img.addEventListener('error', () => { img.style.display = 'none'; });
       avatar.append(img);
     }
-    avatar.append(element('span', 'avatar-fallback', '❄️'));
+    const letter = (profile.displayName || 'S').charAt(0).toUpperCase();
+    avatar.append(element('span', 'avatar-fallback', letter));
     identity.append(avatar);
     const nameBlock = element('div', '');
     nameBlock.append(element('div', 'profile-name', profile.displayName || 'Shinobi'));
     if (profile.life) {
-      nameBlock.append(element('div', 'life ' + (profile.life.alive ? 'alive' : 'dead'),
-        profile.life.alive ? '🟢 Alive' : '☠️ ' + (profile.life.label || 'Dead')));
+      const statusText = profile.life.alive
+        ? 'Status: Alive'
+        : 'Status: Dead' + (profile.life.label ? ' · ' + String(profile.life.label).replace(/^Dead · /, '') : '');
+      nameBlock.append(element('div', 'life ' + (profile.life.alive ? 'alive' : 'dead'), statusText));
+      nameBlock.append(element('div', 'profile-username',
+        'XP: ' + displayNumber(profile.xp) + ' · GLOBAL RANK: ' + (profile.globalRank != null ? '#' + profile.globalRank : '—')));
     }
-    nameBlock.append(element('div', 'profile-username', profile.username ? `@${profile.username}` : 'Telegram profile'));
+    nameBlock.append(element('div', 'profile-username', profile.username ? `@${profile.username}` : 'Telegram user'))
     identity.append(nameBlock);
     content.append(identity);
 

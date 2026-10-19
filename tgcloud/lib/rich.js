@@ -105,30 +105,16 @@ export async function storeContent(screen, ownerId) {
   const balRow = await db.get(sql`SELECT balance FROM users WHERE telegram_id = ${ownerId}`);
   const balance = balRow ? balRow.balance : 0;
   const own = await ownedSet(ownerId);
-  const equipped = await getEquipped(ownerId);
-  const states = await getAllShinobiState(ownerId);
 
+  // Clean store: name + price only (equip via /equip). Buy buttons for unowned.
   const lines = [];
   const buttons = [];
   for (const i of SHINOBI) {
     const isOwned = own.has(i.name);
-    const isEquipped = equipped === i.name;
-    const lv = (states[i.name] && states[i.name].level) || 1;
-    lines.push(
-      `✦ <b>${escapeHtml(i.name)}</b> ${i.emoji} : ${boldNum(i.price)} 🍥`
-      + ` · Lv. ${lv}`
-      + (isEquipped ? ' · 👤 equipped' : isOwned ? ' · ✅ owned' : ''),
-    );
-    if (SKILL_NOTES[i.name]) lines.push(`   <i>${escapeHtml(SKILL_NOTES[i.name])}</i>`);
-    const rowBtns = [];
+    lines.push(`✦ <b>${escapeHtml(i.name)}</b> ${i.emoji} : ${boldNum(i.price)} 🍥`);
     if (!isOwned) {
-      rowBtns.push(btn(`Buy ${i.name} (${boldNum(i.price)} 🍥)`, { callback_data: `sb:${i.name}:${ownerId}` }));
-    } else if (!isEquipped) {
-      rowBtns.push(btn(`Equip ${i.name}`, { callback_data: `seq:${i.name}:${ownerId}` }));
-    } else {
-      rowBtns.push(btn(`Equipped ✓`, { callback_data: `seq:${i.name}:${ownerId}` }));
+      buttons.push([btn(`Buy ${i.name}`, { callback_data: `sb:${i.name}:${ownerId}` })]);
     }
-    buttons.push(rowBtns);
   }
 
   return [
@@ -137,6 +123,7 @@ export async function storeContent(screen, ownerId) {
     P(`🍥 Balance: ${fmt(balance)}`),
     P('⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈'),
     quote(lines.join('\n')),
+    P('Use /equip &lt;name&gt; · /unequip &lt;name&gt; (max 3 equipped)'),
     ...buttons.map((b) => row(...b)),
     ...footer(),
     row(btn('Jutsu', cb('jutsu')), btn('Chakra', cb('chakra'))),

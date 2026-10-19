@@ -75,7 +75,7 @@ test('Mini App tracker catalog uses serializer-safe class keys and preserves bot
 test('Mini App shows the bot avatar and dead/alive status, and escapes text', () => {
   const appJs = fs.readFileSync(path.join(repoRoot, 'web', 'js', 'app.js'), 'utf8');
   assert(appJs.includes('botAvatar'), 'avatar must come from the bot profile picture');
-  assert(appJs.includes('lifeHtml'), 'dead/alive status must render under the name');
+  assert(appJs.includes('statusBlockHtml') && appJs.includes('life.alive'), 'dead/alive status must render under the name');
   assert(appJs.includes("'&': '&amp;'"), 'esc() must really escape HTML');
   assert(appJs.includes("get('page')"), 'deep link ?page=tracker must be handled');
   const html = fs.readFileSync(path.join(repoRoot, 'web', 'index.html'), 'utf8');

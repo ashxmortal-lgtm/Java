@@ -34,5 +34,5 @@ export const abilityKeyboard = () => ({
   }]],
 });
 export const backKeyboard = (id) => ({
-  inline_keyboard: [[{ text: style('Back'), callback_data: `lv:ab:${id}` }]],
+  inline_keyboard: [[{ text: style('← Back'), callback_data: `lv:ab:${id}` }]],
 });

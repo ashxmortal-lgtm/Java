@@ -14,9 +14,21 @@ export const users = table('users', {
   equipped: text('equipped'),
   // 1 = user blocked the bot (set via my_chat_member); cleared on /start
   blocked: integer('blocked').notNull().default(0),
+  // Coins earned through study mode (displayed separately; also added to balance)
+  studyCoins: integer('study_coins').notNull().default(0),
 }, (t) => ({
   usernameIdx: index('idx_users_username').on(t.username),
 }));
+
+export const userEquipped = table('user_equipped', {
+  telegramId: integer('telegram_id').notNull(),
+  shinobi: text('shinobi').notNull(),
+  slot: integer('slot').notNull().default(0),
+}, (t) => ({
+  pk: uniqueIndex('uidx_user_equipped').on(t.telegramId, t.shinobi),
+  idxUser: index('idx_user_equipped_user').on(t.telegramId),
+}));
+
 
 export const inventory = table('inventory', {
   id: integer('id').primaryKey({ autoIncrement: true }),

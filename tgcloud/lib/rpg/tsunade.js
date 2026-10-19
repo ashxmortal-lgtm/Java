@@ -12,7 +12,7 @@
 import { db } from 'sdk';
 import { sql } from 'sdk/db';
 import { api } from '../message_api.js';
-import { render, style, escapeHtml } from '../texts.js';
+import { render, style, escapeHtml, mention } from '../texts.js';
 import { send } from '../chat.js';
 import { getMapPhotoFileId } from '../map/media.js';
 import { todayKey } from '../economy.js';
@@ -72,9 +72,14 @@ export async function handleSearchTsuna(message) {
     return result;
   }
 
-  // Active session → status report.
+  // Active session → status report (works in DM and groups).
   if (row && row.status === 'active') {
-    return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒\n\nNaruto and Jiraiya are searching for Lady Tsunade.\n\n⏳ completes at ${dueText(row.endsAt, t)}\n(search #${row.totalSearches})\n\n❄️ Invoke /search_tsuna again after it finishes to see the result.`;
+    return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒\n\nNaruto and Jiraiya are searching for Lady Tsunade.\n\n⏳ completes at ${dueText(row.endsAt, t)}\n(search #${row.totalSearches})\n\n❄️ Check back at ${dueText(row.endsAt, t)} — invoke /search_tsuna again after it finishes.`;
+  }
+
+  // Starting a new search is group-only
+  if (message.chat && message.chat.type === 'private') {
+    return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐆𝐑𝐎𝐔𝐏 𝐎𝐍𝐋𝐘\n\nStarting a Tsunade search works in groups only.\n\n» Use /search_tsuna in a group where I am a member.\nYou can still check an active search status from DM.`;
   }
 
   // Start a new session — max 2 starts per IST day. Naruto & Jiraiya must

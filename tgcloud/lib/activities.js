@@ -6,6 +6,7 @@ import { dueText } from './rpg/time.js';
 import {
   getShinobiState, isDead, isExhausted, recordPatrolCompletion, resetPatrolStreak,
 } from './rpg/state.js';
+import { addPendingReward, pendingRewardTotal } from './map/pending.js';
 
 const H = 3600;
 export const KINDS = {
@@ -133,7 +134,13 @@ async function finish(a) {
   const coins = reward(c, a.shinobi, base, xpBefore, own.has('Sakura'));
   // Random 50–150 XP per finished patrol/mission.
   const xpGain = c.xpMin + Math.floor(Math.random() * (c.xpMax - c.xpMin + 1));
-  await db.run(sql`UPDATE users SET balance = balance + ${coins}, xp = xp + ${xpGain} WHERE telegram_id = ${id}`);
+  // Coins go to pending (claim at Hokage Office) — only XP is applied immediately.
+  await db.run(sql`UPDATE users SET xp = xp + ${xpGain} WHERE telegram_id = ${id}`);
+  try {
+    await addPendingReward(id, a.shinobi, coins, a.kind);
+  } catch (e) {
+    console.error('[pending reward]', e);
+  }
 
   const before = rankOf(xpBefore)[1];
   const after = rankOf(xpBefore + xpGain)[1];
@@ -152,40 +159,55 @@ async function finish(a) {
       }
     }
   }
+  let pendingTotal = 0;
+  try { pendingTotal = await pendingRewardTotal(id); } catch (_) {}
   return {
     id, name: (u && u.first_name) || 'Shinobi', chatId: a.chat_id,
     kind: a.kind, shinobi: a.shinobi, coins, xp: xpGain,
     rankUp: after !== before ? after : null, found, had, exhaustedUntil,
+    pendingTotal, username: null,
   };
 }
 
 const FOUND = `「𝐋𝐄𝐆𝐄𝐍𝐃𝐀𝐑𝐘 𝐃𝐈𝐒𝐂𝐎𝐕𝐄𝐑𝐘」\n\n🐸 Jiraiya has joined your shinobi roster!\n\n𝑺𝒐𝒎𝒆 𝒑𝒂𝒕𝒓𝒐𝒍𝒔 𝒍𝒆𝒂𝒅 𝒕𝒐 𝒖𝒏𝒆𝒙𝒑𝒆𝒄𝒕𝒆𝒅 𝒎𝒆𝒆𝒕𝒊𝒏𝒈𝒔.\n\n» Check your inventory to see your new shinobi.`;
 
 function fullText(r) {
-  const c = KINDS[r.kind];
-  let s = `「${c.done}」\n\n🥷 Shinobi: ${r.shinobi}\n🍥 Coins earned: +${fmt(r.coins)}\n✦ XP earned: +${r.xp}`;
-  if (r.rankUp) s += `\n🏅 Rank up: ${r.rankUp}`;
-  s += `\n\n${c.doneLine}`;
-  if (r.exhaustedUntil) s += `\n\n🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.`;
-  if (r.kind === 'mission') s += `\n\n⏳ Next mission available in: ${hours(c.cooldown)}`;
-  if (r.had) s += `\n\n𝑱𝒊𝒓𝒂𝒊𝒚𝒂 𝒊𝒔 𝒂𝒍𝒓𝒆𝒂𝒅𝒚 𝒑𝒂𝒓𝒕 𝒐𝒇 𝒚𝒐𝒖𝒓 𝒓𝒐𝒔𝒕𝒆𝒓.`;
+  const emo = EMO[r.shinobi] || '🥷';
+  const title = r.kind === 'patrol' ? '🏮 𝐓𝐄𝐀𝐌 𝐏𝐀𝐓𝐑𝐎𝐋 𝐑𝐄𝐓𝐔𝐑𝐍𝐄𝐃' : '⚔️ 𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄';
+  let s = `${title}\n\n`;
+  if (r.kind === 'patrol') s += `ʜɪᴅᴅᴇɴ ʟᴇᴀғ ᴠɪʟʟᴀɢᴇ ɪs sᴀғᴇ.\n\n`;
+  s += `${emo} ${bold(r.shinobi)} → +${fmt(r.coins)} 🍥\n`;
+  s += `⭐ +${r.xp} xᴘ\n`;
+  if (r.rankUp) s += `🏅 Rank up: ${r.rankUp}\n`;
+  if (r.pendingTotal > 0) s += `\n🍥 𝐏𝐞𝐧𝐝𝐢𝐧𝐠 𝐭𝐨𝐭𝐚𝐥: ${fmt(r.pendingTotal)} ᴋᴏɴᴏʜᴀ ᴄᴏɪɴs\n`;
+  if (r.exhaustedUntil) s += `\n🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.\n`;
+  if (r.kind === 'mission') s += `\n⏳ Next mission available in: ${hours(KINDS.mission.cooldown)}\n`;
+  if (r.had) s += `\n𝑱𝒊𝒓𝒂𝒊𝒚𝒂 𝒊𝒔 𝒂𝒍𝒓𝒆𝒂𝒅𝒚 𝒑𝒂𝒓𝒕 𝒐𝒇 𝒚𝒐𝒖𝒓 𝒓𝒐𝒔𝒕𝒆𝒓.\n`;
+  s += `\n💰 ᴄʟᴀɪᴍ ᴀᴛ ᴛʜᴇ ʜᴏᴋᴀɢᴇ ᴏғғɪᴄᴇ — /map → 🏯 → 💰 ᴄʟᴀɪᴍ ʀᴇᴡᴀʀᴅ.`;
   return s;
 }
 // Group reminder (the mention is added by the caller).
 function remindText(r) {
-  const c = KINDS[r.kind];
-  let s = `✅ ${c.done}\n\n${r.shinobi} returned from ${c.word}.\nreward: ${fmt(r.coins)} 🍥  ·  XP +${r.xp}`;
-  if (r.rankUp) s += `\n🏅 Rank up: ${r.rankUp}`;
-  if (r.found) s += `\n🐸 Jiraiya joined your roster!`;
-  if (r.exhaustedUntil) s += `\n🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.`;
+  const emo = EMO[r.shinobi] || '🥷';
+  const title = r.kind === 'patrol' ? '🏮 𝐓𝐄𝐀𝐌 𝐏𝐀𝐓𝐑𝐎𝐋 𝐑𝐄𝐓𝐔𝐑𝐍𝐄𝐃' : '⚔️ 𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄';
+  let s = `${title}\n\n`;
+  if (r.kind === 'patrol') s += `ʜɪᴅᴅᴇɴ ʟᴇᴀғ ᴠɪʟʟᴀɢᴇ ɪs sᴀғᴇ.\n\n`;
+  s += `${emo} ${bold(r.shinobi)} → +${fmt(r.coins)} 🍥\n`;
+  s += `⭐ +${r.xp} xᴘ\n`;
+  if (r.rankUp) s += `🏅 Rank up: ${r.rankUp}\n`;
+  if (r.found) s += `🐸 Jiraiya joined your roster!\n`;
+  if (r.pendingTotal > 0) s += `\n🍥 𝐏𝐞𝐧𝐝𝐢𝐧𝐠 𝐭𝐨𝐭𝐚𝐥: ${fmt(r.pendingTotal)} ᴋᴏɴᴏʜᴀ ᴄᴏɪɴs\n`;
+  if (r.exhaustedUntil) s += `🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.\n`;
+  s += `\n💰 ᴄʟᴀɪᴍ ᴀᴛ ᴛʜᴇ ʜᴏᴋᴀɢᴇ ᴏғғɪᴄᴇ — /map → 🏯 → 💰 ᴄʟᴀɪᴍ ʀᴇᴡᴀʀᴅ.`;
   return s;
 }
 // Short DM.
 function dmText(r) {
-  const c = KINDS[r.kind];
-  let s = `✅ ${c.done}\n\n${r.shinobi} returned from ${c.word}.\n🍥 +${fmt(r.coins)}  ·  ✦ XP +${r.xp}`;
+  const emo = EMO[r.shinobi] || '🥷';
+  let s = `✅ ${KINDS[r.kind].done}\n\n${emo} ${r.shinobi} returned.\n🍥 +${fmt(r.coins)} (pending)  ·  ✦ XP +${r.xp}`;
   if (r.found) s += `\n🐸 Jiraiya joined your roster!`;
-  if (r.exhaustedUntil) s += `\n🔥 ${r.shinobi} is exhausted — ready at ${dueText(r.exhaustedUntil)}.`;
+  if (r.exhaustedUntil) s += `\n🔥 Exhausted until ${dueText(r.exhaustedUntil)}.`;
+  s += `\n\n💰 Claim at Hokage Office: /map → 🏯`;
   return s;
 }
 

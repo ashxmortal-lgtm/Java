@@ -134,7 +134,7 @@ async function myGiftsBlocks(userId) {
     }
   }
   blocks.push(divider);
-  blocks.push(row(cb('◂ Back to store', 'gift:store', 'primary')));
+  blocks.push(row(cb('← Back', 'gift:store', 'primary')));
   return blocks;
 }
 

@@ -6,7 +6,7 @@ import { listCommands } from './command_registry.js';
 import { groupAdmins as GA } from '../schema.js';
 import { sql } from 'sdk/db';
 import { getEquipped } from './rpg/state.js';
-import { handleStudyHub } from './study/hub.js';
+import { handleStudyHub, buildStudyStatsBlocks } from './study/hub.js';
 
 const bold = (text) => ({ type: 'bold', text });
 const para = (...t) => ({ type: 'paragraph', text: t.length === 1 ? t[0] : t });
@@ -137,18 +137,19 @@ export async function buildWelcomeBlocks(user) {
   const mp = await miniProfile(user);
   const botLink = `https://t.me/${uname}`;
   return [
-    para(mention(user), ' welcome to ', urlText(BOT_NAME, botLink), ' bot.'),
-    para('Naruto inspired game for groups and anime fans.'),
-    para('/daily : claim daily shinobi coins 🍥'),
-    para('Your mini profile:'),
+    para(mention(user), ' ᴡᴇʟᴄᴏᴍᴇ!'),
+    para(urlText(BOT_NAME, botLink), ' ʙᴏᴛ has ɴᴀʀᴜᴛᴏ ɪɴꜱᴘɪʀᴇᴅ ɢᴀᴍᴇ ꜰᴏʀ ɢʀᴏᴜᴘꜱ ᴀɴᴅ ᴀɴɪᴍᴇ ꜰᴀɴꜱ.'),
+    para('Also this bot has study features exclusively for NEET aspirants. (Check in help menu)'),
+    para('/daily : ᴄʟᴀɪᴍ ᴅᴀɪʟʏ ꜱʜɪɴᴏʙɪ ᴄᴏɪɴꜱ 🍥'),
+    para('ʏᴏᴜʀ ᴍɪɴɪ ᴘʀᴏꜰɪʟᴇ:'),
     blockquote(
-      `Equipped shinobi: ${mp.equipped}`,
-      `Balance : ${Number(mp.balance).toLocaleString('en-US')}`,
-      `Owned jutsu: ${mp.jutsu}`,
-      `Kills: ${mp.kills}`,
-      `Global rank: ${mp.rank}`,
+      `ᴇǫᴜɪᴘᴘᴇᴅ ꜱʜɪɴᴏʙɪ: ${mp.equipped}`,
+      `ʙᴀʟᴀɴᴄᴇ : ${Number(mp.balance).toLocaleString('en-US')}`,
+      `ᴏᴡɴᴇᴅ ᴊᴜᴛꜱᴜ: ${mp.jutsu}`,
+      `ᴋɪʟʟꜱ: ${mp.kills}`,
+      `ɢʟᴏʙᴀʟ ʀᴀɴᴋ: ${mp.rank}`,
     ),
-    para('Add ', urlText(BOT_NAME, botLink), ' to your grp as admin to start playing.'),
+    para('ᴀᴅᴅ ', urlText(BOT_NAME, botLink), ' ᴛᴏ ʏᴏᴜʀ ɢʀᴘ ᴀꜱ ᴀᴅᴍɪɴ ᴛᴏ ꜱᴛᴀʀᴛ ᴘʟᴀʏɪɴɢ.'),
     ...buttons,
   ];
 }
@@ -157,7 +158,7 @@ export async function buildWelcomeBlocks(user) {
 // Callback data: hp:<screen>[:w]. The ":w" suffix means the menu was opened
 // from the welcome message, so the top-level Back returns there.
 
-const backBtn = (data) => row(cb('Back', data, 'danger'));
+const backBtn = (data) => row(cb('← Back', data, 'danger'));
 const sfx = (fromWelcome) => (fromWelcome ? ':w' : '');
 
 export async function buildUserHelpBlocks(_user, fromWelcome = false) {
@@ -186,6 +187,9 @@ function gameBlocks(w) {
     para('/byakugan — Check protection status'),
     para('/search_tsuna — Search for Tsunade'),
     para('/mt — send Mind Transmission to target'),
+    para('/transfer — transfer coins (reply in group)'),
+    para('/equip · /unequip — equip shinobi (max 3)'),
+    para('/leaderboard (/lb) — top balances'),
     row(cb('Extras', `hp:extras${sfx(w)}`, 'primary'), cb('more ❄️ games', `hp:more${sfx(w)}`, 'primary')),
     backBtn(`hp:home${sfx(w)}`),
   ];
@@ -279,14 +283,21 @@ export async function handleWelcomeCallback(cq) {
     const [, screen, flag] = data.split(':');
     const w = flag === 'w';
     if (screen === 'study') {
-      // Opens the /study portal as a new message.
+      // Show all-time study stats (use /study for the hub)
       await api.answerCallbackQuery({ callback_query_id: cq.id });
-      await handleStudyHub({
-        chat: cq.message.chat,
-        from: cq.from,
-        message_id: cq.message.message_id,
-        message_thread_id: cq.message.message_thread_id,
-      });
+      try {
+        const stats = await buildStudyStatsBlocks(cq.from);
+        await editTo(cq, stats);
+      } catch (e) {
+        console.error('study stats failed:', e?.description || e);
+        // Fallback to study hub
+        await handleStudyHub({
+          chat: cq.message.chat,
+          from: cq.from,
+          message_id: cq.message.message_id,
+          message_thread_id: cq.message.message_thread_id,
+        });
+      }
       return true;
     }
     await api.answerCallbackQuery({ callback_query_id: cq.id });

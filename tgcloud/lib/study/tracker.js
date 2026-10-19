@@ -25,6 +25,18 @@ const chStyle = (r) => (icon(r) === '🟢' ? 'success' : icon(r) === '🟡' ? 'p
 const getRow = (uid, chId) =>
   db.select().from(T).where(and(eq(T.userId, uid), eq(T.chapterId, chId))).get();
 
+async function maybeAwardChapterComplete(uid, chId) {
+  const row = await getRow(uid, chId);
+  if (!row) return;
+  // First time all three done (revision, practice, pyq)
+  if (row.revisionDone && row.practiceDone && row.pyqDone && (row.xpCyclesAwarded || 0) === 0) {
+    try {
+      const { adjustBalance } = await import('../economy.js');
+      await adjustBalance(uid, 5000, { study: true });
+    } catch (e) { console.error('[chapter complete reward]', e); }
+  }
+}
+
 export async function toggleTracker(uid, chId, act) {
   const a = ACTS[act];
   if (!a) return;
@@ -36,6 +48,7 @@ export async function toggleTracker(uid, chId, act) {
     `UPDATE biology_tracker SET ${a.col}_count = ${a.col}_count + (1 - ${a.col}_done), ` +
     `${a.col}_done = 1 - ${a.col}_done, updated_at = :t WHERE user_id = :u AND chapter_id = :c`,
     { ':t': nowIso(), ':u': uid, ':c': chId });
+  await maybeAwardChapterComplete(uid, chId);
   await db.run(
     'UPDATE biology_tracker SET xp_cycles_awarded = min(revision_count, practice_count, pyq_count) ' +
     'WHERE user_id = :u AND chapter_id = :c AND min(revision_count, practice_count, pyq_count) > xp_cycles_awarded',
@@ -63,13 +76,14 @@ export async function adjustTracker(uid, chId, act, delta) {
       `updated_at = :t WHERE user_id = :u AND chapter_id = :c`,
       { ':t': nowIso(), ':u': uid, ':c': chId });
   }
+  if (d === 1) await maybeAwardChapterComplete(uid, chId);
   await db.run(
     'UPDATE biology_tracker SET xp_cycles_awarded = min(revision_count, practice_count, pyq_count) ' +
     'WHERE user_id = :u AND chapter_id = :c AND min(revision_count, practice_count, pyq_count) > xp_cycles_awarded',
     { ':u': uid, ':c': chId });
 }
 
-const nav = (backData, backLabel = '⬅️ Back') => row(
+const nav = (backData, backLabel = '← Back') => row(
   btn(backLabel, backData),
   btn('❌ Close', 'tracker_close', 'danger'),
 );

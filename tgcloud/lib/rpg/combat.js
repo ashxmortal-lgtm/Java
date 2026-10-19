@@ -16,7 +16,7 @@ import { fmt } from '../store.js';
 import { dueText } from './time.js';
 import {
   once, getShinobiState, ensureShinobiState, markDead, isDead,
-  getUserSkills, setUserSkills, getEquipped, ownedSet, activateProtection,
+  getUserSkills, setUserSkills, getEquipped, isEquipped, ownedSet, activateProtection,
 } from './state.js';
 import {
   itachiRobPct, cloneWindowSec,
@@ -63,12 +63,41 @@ async function dmKilled(targetUser, attackerUser, groupTitle) {
     await api.sendMessage({
       chat_id: targetUser.id,
       text: style(
-        `☠️ You've been killed by ${mention(attackerUser)} in ${escapeHtml(title)}.\n\n` +
-        `Use /protect so the next strike can't land.`,
+        `${mention(targetUser)} you have been killed by ${mention(attackerUser)} in ${escapeHtml(title)}\n` +
+        `Use /protect to enable 24 hr protection.`,
       ),
       parse_mode: 'HTML',
     });
   } catch (_) { /* target never started the bot */ }
+}
+
+async function dmRobbed(targetUser, robberUser, groupTitle, itachiLvl) {
+  const title = groupTitle || 'the group';
+  const lvl = itachiLvl != null ? ` (Itachi Lv.${itachiLvl})` : '';
+  try {
+    await api.sendMessage({
+      chat_id: targetUser.id,
+      text: style(
+        `${mention(targetUser)} you have been robbed in ${escapeHtml(title)} by ${mention(robberUser)} using itachi${lvl}.\n` +
+        `Use /protect to enable 24 hr protection.`,
+      ),
+      parse_mode: 'HTML',
+    });
+  } catch (_) {}
+}
+
+async function dmByakuganExposed(targetUser, scannerUser, groupTitle) {
+  const title = groupTitle || 'the group';
+  try {
+    await api.sendMessage({
+      chat_id: targetUser.id,
+      text: style(
+        `Your protection countdown is exposed to ${mention(scannerUser)} in ${escapeHtml(title)}\n` +
+        `⚠️stay alert!!!`,
+      ),
+      parse_mode: 'HTML',
+    });
+  } catch (_) {}
 }
 
 function replyText(message, body) {
@@ -267,6 +296,10 @@ export async function handleKill(message) {
     await replyText(message, '👁️ You need Itachi on your roster to use /kill.\n\n» Recruit at /shinobi_store.');
     return true;
   }
+  if (!(await isEquipped(user.id, 'Itachi'))) {
+    await replyText(message, '👁️ Equip Itachi first: /equip Itachi\n\nActive skills require the shinobi equipped (max 3).');
+    return true;
+  }
 
   await sweepClones();
   const target = message.reply_to_message.from;
@@ -413,6 +446,10 @@ export async function handleRob(message) {
     await replyText(message, '👁️ You need Itachi on your roster to use /rob.\n\n» Recruit at /shinobi_store.');
     return true;
   }
+  if (!(await isEquipped(user.id, 'Itachi'))) {
+    await replyText(message, '👁️ Equip Itachi first: /equip Itachi\n\nActive skills require the shinobi equipped (max 3).');
+    return true;
+  }
 
   await sweepClones();
   const target = message.reply_to_message.from;
@@ -473,6 +510,12 @@ export async function handleRob(message) {
   `);
   await replyHtml(message,
     `${mention(user)} robbed ${mention(target)}.\n${fmt(steal)} is successful Robbed.\n\nROBBERY RATE: ${pct}%`);
+  // DM target about robbery
+  try {
+    const skills = await getUserSkills(user.id);
+    const itachiLvl = skills?.itachiLevel || skills?.itachi_level || null;
+    await dmRobbed(target, user, message.chat.title || 'the group', itachiLvl);
+  } catch (e) { console.error('[dmRobbed]', e); }
   return true;
 }
 
@@ -482,6 +525,10 @@ export async function handleProtect(message) {
   const user = message.from;
   if (!(await isOwner(user.id, 'Jiraiya'))) {
     await replyText(message, '🐸 You need Jiraiya on your roster to use /protect.\n\n» He is discovered on Naruto patrols.');
+    return true;
+  }
+  if (!(await isEquipped(user.id, 'Jiraiya'))) {
+    await replyText(message, '🐸 Equip Jiraiya first: /equip Jiraiya\n\nActive skills require the shinobi equipped (max 3).');
     return true;
   }
   const r = await activateProtection(user.id);
@@ -504,6 +551,10 @@ export async function handleByakugan(message) {
   }
   if (!(await isOwner(user.id, 'Hinata'))) {
     await replyText(message, '👁️ You need Hinata on your roster to use /byakugan.\n\n» Recruit at /shinobi_store.');
+    return true;
+  }
+  if (!(await isEquipped(user.id, 'Hinata'))) {
+    await replyText(message, '👁️ Equip Hinata first: /equip Hinata\n\nActive skills require the shinobi equipped (max 3).');
     return true;
   }
 
@@ -546,6 +597,10 @@ export async function handleByakugan(message) {
       await replyHtml(message, report);
     }
   }
+  // Notify target that their protection was exposed
+  try {
+    await dmByakuganExposed(target, user, message.chat.title || 'the group');
+  } catch (e) { console.error('[dmByakugan]', e); }
   return true;
 }
 

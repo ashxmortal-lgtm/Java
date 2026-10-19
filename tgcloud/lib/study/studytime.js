@@ -18,13 +18,17 @@ export async function handleStudytime(message) {
   if (g && g.goalDate === today && g.status !== 'awaiting_goal') {
     const note = g.status === 'closed' ? '✅ Aaj ka goal already complete ho chuka hai.'
       : g.status === 'report_submitted' ? '📥 Report mil chuki hai. Result ke buttons dabao.'
-      : '🎯 Aaj ka goal already set hai. /report se kabhi bhi report do.';
+      : '🎯 ᴀᴀᴊ ᴋᴀ ɢᴏᴀʟ ᴀʟʀᴇᴀᴅʏ ꜱᴇᴛ ʜᴀɪ. /report ꜱᴇ ᴋᴀʙʜɪ ʙʜɪ ʀᴇᴘᴏʀᴛ ᴅᴏ.';
     const blocks = [
       head('📚 𝐃𝐚𝐢𝐥𝐲 𝐒𝐭𝐮𝐝𝐲 𝐆𝐨𝐚𝐥'),
       para('🥷 ', who),
       para(note),
     ];
     if (g.goalText) blocks.push(quoteText(g.goalText));
+    // Green [change] button to allow resetting the goal if set incorrectly
+    if (g.status !== 'closed' && g.status !== 'report_submitted') {
+      blocks.push(row(btn('change', `study_change_goal:${c}:${u}`, 'success')));
+    }
     await sendBlocks(c, blocks, { ...rp(message.message_id), skipEntities: false });
     return;
   }
@@ -121,18 +125,52 @@ export async function askStudy(g) {
 }
 
 export async function handleStudyCb(cq) {
-  const m = (cq.data || '').match(/^study_(done|missed):(-?\d+):(\d+)$/);
+  const data = cq.data || '';
+  // Change goal button: reset to awaiting_goal so user can re-enter
+  const changeM = data.match(/^study_change_goal:(-?\d+):(\d+)$/);
+  if (changeM) {
+    const c = +changeM[1], u = +changeM[2];
+    if (cq.from.id !== u) {
+      await api.answerCallbackQuery({ callback_query_id: cq.id, text: 'Ye button tumhare liye nahi hai.' });
+      return true;
+    }
+    const today = istNow().date;
+    await db.run(
+      "UPDATE study_goals SET goal_text=NULL, status='awaiting_goal', report_text=NULL, completed=NULL, updated_at=:n WHERE chat_id=:c AND user_id=:u AND goal_date=:d AND status NOT IN ('closed','report_submitted')",
+      { ':n': nowIso(), ':c': c, ':u': u, ':d': today }
+    );
+    await api.answerCallbackQuery({ callback_query_id: cq.id, text: 'Goal reset. Send new goal.' });
+    if (cq.message) {
+      await editBlocks(cq.message.chat.id, cq.message.message_id, [
+        head('📚 𝐃𝐚𝐢𝐥𝐲 𝐒𝐭𝐮𝐝𝐲 𝐆𝐨𝐚𝐥'),
+        para('🥷 ', mention(cq.from)),
+        para('✍️ Send your study goal for today.'),
+        divider,
+        para('⏰ At ', bold('22:00'), " I'll ask you to report back."),
+      ]);
+    }
+    return true;
+  }
+
+  const m = data.match(/^study_(done|missed):(-?\d+):(\d+)$/);
   if (!m) return false;
   const c = +m[2], u = +m[3];
   if (cq.from.id !== u) { await api.answerCallbackQuery({ callback_query_id: cq.id, text: 'Ye button tumhare liye nahi hai.' }); return true; }
   const ok = m[1] === 'done' ? 1 : 0;
-  const r = await db.run("UPDATE study_goals SET completed=:ok, status='closed', updated_at=:n WHERE chat_id=:c AND user_id=:u AND status='report_submitted'",
+  // Allow closing from report_submitted, goal_set or asked (direct complete via /report)
+  const r = await db.run("UPDATE study_goals SET completed=:ok, status='closed', updated_at=:n WHERE chat_id=:c AND user_id=:u AND status IN ('report_submitted','goal_set','asked')",
     { ':ok': ok, ':n': nowIso(), ':c': c, ':u': u });
   if (!r.rowsAffected) { await api.answerCallbackQuery({ callback_query_id: cq.id, text: 'Ye pehle hi process ho chuka hai.' }); return true; }
   await api.answerCallbackQuery({ callback_query_id: cq.id });
+  // Economy: +500 / -500 for goal complete/incomplete (no negative balance)
+  try {
+    const { adjustBalance } = await import('../economy.js');
+    const delta = ok ? 500 : -500;
+    await adjustBalance(u, delta, { allowPartial: true, study: true });
+  } catch (e) { console.error('study goal economy', e); }
   const blocks = ok
-    ? [head('🎉 GOAL COMPLETED'), para('🥷 ', mention(cq.from))]
-    : [head('😔 GOAL NOT COMPLETED'), para('🥷 ', mention(cq.from)), para('🔥 𝑻𝒐𝒎𝒐𝒓𝒓𝒐𝒘\'𝒔 𝒂 𝒏𝒆𝒘 𝒅𝒂𝒚. 𝑲𝒆𝒆𝒑 𝒈𝒐𝒊𝒏𝒈.')];
+    ? [head('🎉 GOAL COMPLETED'), para('🥷 ', mention(cq.from)), para('+500 🍥')]
+    : [head('😔 GOAL NOT COMPLETED'), para('🥷 ', mention(cq.from)), para('-500 🍥 (or remaining balance)'), para('🔥 𝑻𝒐𝒎𝒐𝒓𝒓𝒐𝒘\'𝒔 𝒂 𝒏𝒆𝒘 𝒅𝒂𝒚. 𝑲𝒆𝒆𝒑 𝒈𝒐𝒊𝒏𝒈.')];
   if (cq.message) await editBlocks(cq.message.chat.id, cq.message.message_id, blocks);
   return true;
 }
