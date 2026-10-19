@@ -7,7 +7,7 @@ import {
   GAME_XOXO, GAME_RPS, COIN, STATUS_CUSTOM, STATUS_PLAYING,
 } from './constants.js';
 import {
-  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby, abortXoxoMatch,
+  createLobby, setLobbyMessage, setStake, startCustomStake, joinLobby, abortXoxoMatch, abortRpsMatch,
   acceptChallenge, startRpsMatch, cancelLobby, makeMove, rpsSubmitMove,
   rpsAdvanceReveal, getLobby, getPlayerLobbyId, clearPlayerLock, getStats,
   renderLobby, gamesListBody, gamesKeyboard,
@@ -121,6 +121,23 @@ export async function handleCancelCommand(message) {
         await sendGameRich(
           chatId,
           gameBody(user, p('XOXO match aborted; both stakes have been refunded.')),
+          null,
+        );
+        return;
+      }
+      if (lobby.game_type === GAME_RPS) {
+        const result = await abortRpsMatch(lid, user.id);
+        if (!result.ok) {
+          const msg = result.error === 'not_participant'
+            ? 'Only a player in this RPS match can abort it.'
+            : 'This RPS match is no longer active.';
+          await sendGameRich(chatId, gameBody(user, p(msg)), null);
+          return;
+        }
+        if (lobby.message_id) await showLobby(chatId, lobby.message_id, result.lobby, user);
+        await sendGameRich(
+          chatId,
+          gameBody(user, p('RPS match aborted; stakes have been refunded.')),
           null,
         );
         return;

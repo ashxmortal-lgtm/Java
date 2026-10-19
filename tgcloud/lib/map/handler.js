@@ -1,3 +1,4 @@
+import { getAllShinobiState, isDead, isExhausted } from '../rpg/state.js';
 /**
  * Map command + callback router.
  * Map artwork remains a photo; all controls are Telegram Rich Message buttons.
@@ -318,45 +319,133 @@ async function toggleGateSelection(telegramId, shinobi) {
   }
 }
 
-async function availableShinobi(telegramId) {
-  let names = [];
+
+async function clearMissionSelection(telegramId) {
   try {
-    names = await ownedNames(telegramId);
+    await db.run(sql`DELETE FROM map_mission_selection WHERE telegram_id = ${telegramId}`);
+  } catch (_) {}
+}
+
+async function listMissionSelection(telegramId) {
+  try {
+    await db.run(sql`CREATE TABLE IF NOT EXISTS map_mission_selection (telegram_id INTEGER, shinobi TEXT, PRIMARY KEY (telegram_id, shinobi))`);
+    const rows = await db.all(sql`
+      SELECT shinobi FROM map_mission_selection WHERE telegram_id = ${telegramId}
+    `);
+    return new Set((rows || []).map((r) => r.shinobi));
   } catch (_) {
-    return [];
+    return new Set();
   }
-  const busy = new Set();
+}
+
+async function toggleMissionSelection(telegramId, shinobi) {
   try {
-    const acts = await db.all(sql`
-      SELECT shinobi FROM activities
-      WHERE telegram_id = ${telegramId} AND status = 'active'
+    await db.run(sql`CREATE TABLE IF NOT EXISTS map_mission_selection (telegram_id INTEGER, shinobi TEXT, PRIMARY KEY (telegram_id, shinobi))`);
+    const exists = await db.get(sql`
+      SELECT 1 FROM map_mission_selection
+      WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
     `);
-    for (const a of acts || []) busy.add(a.shinobi);
-  } catch (_) {}
-  try {
-    const bbq = await listBbqSessions(telegramId);
-    for (const s of bbq || []) busy.add(s.shinobi);
-  } catch (_) {}
-  // Dead or exhausted shinobi can't be dispatched either (server-side guards).
-  try {
-    const t = now();
-    const blocked = await db.all(sql`
-      SELECT shinobi FROM shinobi_state
-      WHERE telegram_id = ${telegramId} AND (dead_until > ${t} OR exhausted_until > ${t})
+    if (exists) {
+      await db.run(sql`
+        DELETE FROM map_mission_selection
+        WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
+      `);
+      return false;
+    }
+    await db.run(sql`
+      INSERT OR IGNORE INTO map_mission_selection (telegram_id, shinobi)
+      VALUES (${telegramId}, ${shinobi})
     `);
-    for (const s of blocked || []) busy.add(s.shinobi);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function selectAllMission(telegramId, names) {
+  try {
+    await db.run(sql`CREATE TABLE IF NOT EXISTS map_mission_selection (telegram_id INTEGER, shinobi TEXT, PRIMARY KEY (telegram_id, shinobi))`);
+    for (const n of names) {
+      await db.run(sql`INSERT OR IGNORE INTO map_mission_selection (telegram_id, shinobi) VALUES (${telegramId}, ${n})`);
+    }
   } catch (_) {}
-  return names.filter((n) => !busy.has(n));
+}
+
+async function selectAllGate(telegramId, names) {
+  try {
+    for (const n of names) {
+      await db.run(sql`INSERT OR IGNORE INTO map_gate_selection (telegram_id, shinobi) VALUES (${telegramId}, ${n})`);
+    }
+  } catch (_) {}
+}
+
+async function getEligibleStatus(telegramId, kind) {
+  const eligible = KINDS[kind].eligible;
+  const own = await ownedNames(telegramId);
+  const t = now();
+  const available = [];
+  const busyNotes = [];
+
+  const acts = await db.all(sql`
+    SELECT shinobi, kind, status, ends_at, cooldown_until FROM activities
+    WHERE telegram_id = ${telegramId}
+  `);
+  const actMap = Object.fromEntries((acts || []).map((a) => [a.shinobi, a]));
+
+  const search = await db.get(sql`
+    SELECT status, ends_at FROM tsunade_search WHERE telegram_id = ${telegramId}
+  `);
+  const searchActive = search && search.status === 'active';
+
+  const states = await getAllShinobiState(telegramId);
+
+  for (const name of eligible) {
+    if (!own.includes(name)) continue;
+    const act = actMap[name];
+    const st = states[name] || {};
+
+    if (name !== 'Starter Shinobi' && isDead(st, t)) {
+      busyNotes.push(`• ${EMO[name] || '🥷'} ${name}: dead (revives at ${dueText(st.deadUntil, t)})`);
+      continue;
+    }
+    if (act && act.status === 'active' && act.ends_at > t) {
+      const actWord = act.kind === 'mission' ? 'mission' : 'patrol';
+      busyNotes.push(`• ${EMO[name] || '🥷'} ${name}: on ${actWord} (returns at ${dueText(act.ends_at, t)})`);
+      continue;
+    }
+    if (searchActive && (name === 'Naruto' || name === 'Jiraiya')) {
+      busyNotes.push(`• ${EMO[name] || '🥷'} ${name}: searching Tsunade (ends at ${dueText(search.ends_at, t)})`);
+      continue;
+    }
+    if (isExhausted(st, t)) {
+      busyNotes.push(`• ${EMO[name] || '🥷'} ${name}: exhausted (ready at ${dueText(st.exhaustedUntil, t)})`);
+      continue;
+    }
+    if (kind === 'mission' && act && act.cooldown_until > t) {
+      busyNotes.push(`• ${EMO[name] || '🥷'} ${name}: cooldown (ready at ${dueText(act.cooldown_until, t)})`);
+      continue;
+    }
+    available.push(name);
+  }
+  return { available, busyNotes };
 }
 
 function patrolPickKeyboard(userId, available, selected) {
-  const rows = available.map((name) => {
-    const mark = selected.has(name) ? '✅' : '⬜️';
-    return [{
+  const rows = [];
+  const pickButtons = available.map((name) => {
+    const mark = selected.has(name) ? '✅' : '❌';
+    return {
       text: `${mark} ${EMO[name] || '🥷'} ${name}`,
       callback_data: `map_ptog:${name}:${userId}`,
-    }];
+    };
   });
+  for (let i = 0; i < pickButtons.length; i += 2) {
+    rows.push(pickButtons.slice(i, i + 2));
+  }
+  const allSelected = available.length > 0 && available.every((n) => selected.has(n));
+  rows.push([
+    { text: allSelected ? '⬜ Deselect All' : '🔘 Select All', callback_data: guard('map_pall', userId) },
+  ]);
   rows.push([
     { text: '🚀 Send on Patrol', callback_data: guard('map_psend', userId) },
     { text: '✖️ Cancel', callback_data: guard('map_loc_gate', userId) },
@@ -364,6 +453,31 @@ function patrolPickKeyboard(userId, available, selected) {
   rows.push(backToMapRow(userId));
   return { inline_keyboard: rows };
 }
+
+function missionPickKeyboard(userId, available, selected) {
+  const rows = [];
+  const pickButtons = available.map((name) => {
+    const mark = selected.has(name) ? '✅' : '❌';
+    return {
+      text: `${mark} ${EMO[name] || '🥷'} ${name}`,
+      callback_data: `map_mtog:${name}:${userId}`,
+    };
+  });
+  for (let i = 0; i < pickButtons.length; i += 2) {
+    rows.push(pickButtons.slice(i, i + 2));
+  }
+  const allSelected = available.length > 0 && available.every((n) => selected.has(n));
+  rows.push([
+    { text: allSelected ? '⬜ Deselect All' : '🔘 Select All', callback_data: guard('map_mall', userId) },
+  ]);
+  rows.push([
+    { text: '🚀 Send on Mission', callback_data: guard('map_msend', userId) },
+    { text: '✖️ Cancel', callback_data: guard('map_loc_hokage', userId) },
+  ]);
+  rows.push(backToMapRow(userId));
+  return { inline_keyboard: rows };
+}
+
 
 async function claimRewardsBody(telegramId) {
   const rows = await listPendingRewards(telegramId);
@@ -605,37 +719,120 @@ export async function handleMapCallback(cb) {
     // --- Hokage: mission hub ---
     if (action === 'map_mission_hub') {
       await answer(cb);
-      const eligible = KINDS.mission.eligible;
-      const own = await ownedNames(user.id);
-      const rows = [];
-      for (const name of eligible) {
-        if (!own.includes(name)) continue;
-        rows.push([{
-          text: `${EMO[name] || '🥷'} ${name}`,
-          callback_data: `map_msel:${name}:${user.id}`,
-        }]);
-      }
-      if (!rows.length) {
+      await clearMissionSelection(user.id);
+      const { available, busyNotes } = await getEligibleStatus(user.id, 'mission');
+      if (!available.length) {
         await showScreen(
           chatId,
           messageId,
           user,
           locBody('🏯 SHINOBI MISSION', [
-            "You don't own a mission-eligible shinobi yet.",
-            'Recruit Sasuke or Naruto from Stores.',
+            "No mission-eligible shinobi available right now.",
+            ...(busyNotes.length ? ['', '<b>Status:</b>', ...busyNotes] : ['Recruit Sasuke or Naruto from Stores.']),
           ]),
           hokageKeyboard(user.id),
           'hokage',
         );
         return true;
       }
-      rows.push([{ text: '← Back', callback_data: guard('map_loc_hokage', user.id) }]);
       await showScreen(
         chatId,
         messageId,
         user,
-        locBody('🏯 SHINOBI MISSION', ['Select a shinobi to dispatch.']),
-        { inline_keyboard: rows },
+        locBody('🏯 SELECT SHINOBI', [
+          'Select mission-eligible shinobi to dispatch.',
+          ...(busyNotes.length ? ['', '<b>Unavailable:</b>', ...busyNotes] : []),
+        ]),
+        missionPickKeyboard(user.id, available, new Set()),
+        'hokage',
+      );
+      return true;
+    }
+
+    if (action === 'map_mtog' && parts.length >= 3) {
+      const shinobi = parts[1];
+      await toggleMissionSelection(user.id, shinobi);
+      await answer(cb);
+      const { available, busyNotes } = await getEligibleStatus(user.id, 'mission');
+      const selected = await listMissionSelection(user.id);
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🏯 SELECT SHINOBI', [
+          `Selected: ${selected.size}`,
+          'Tap to toggle, then Send on Mission.',
+          ...(busyNotes.length ? ['', '<b>Unavailable:</b>', ...busyNotes] : []),
+        ]),
+        missionPickKeyboard(user.id, available, selected),
+        'hokage',
+      );
+      return true;
+    }
+
+    if (action === 'map_mall') {
+      await answer(cb);
+      const { available } = await getEligibleStatus(user.id, 'mission');
+      const selected = await listMissionSelection(user.id);
+      const allSelected = available.length > 0 && available.every((n) => selected.has(n));
+      if (allSelected) {
+        await clearMissionSelection(user.id);
+      } else {
+        await selectAllMission(user.id, available);
+      }
+      const newSel = await listMissionSelection(user.id);
+      const { available: av2, busyNotes } = await getEligibleStatus(user.id, 'mission');
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🏯 SELECT SHINOBI', [
+          `Selected: ${newSel.size}`,
+          'Tap to toggle, then Send on Mission.',
+          ...(busyNotes.length ? ['', '<b>Unavailable:</b>', ...busyNotes] : []),
+        ]),
+        missionPickKeyboard(user.id, av2, newSel),
+        'hokage',
+      );
+      return true;
+    }
+
+    if (action === 'map_msend') {
+      if (cb.message && cb.message.chat && cb.message.chat.type === 'private') {
+        await answer(cb, 'Missions work in groups only.', true);
+        return true;
+      }
+      const selected = [...(await listMissionSelection(user.id))];
+      if (!selected.length) {
+        await answer(cb, 'Select at least one shinobi.', true);
+        return true;
+      }
+      await answer(cb);
+      const results = [];
+      for (const shinobi of selected) {
+        const r = await runActivity(user, 'mission', shinobi, chatId);
+        const label = r.status === 'ok'
+          ? 'dispatched'
+          : r.status === 'already_active'
+            ? 'already on mission'
+            : r.status === 'busy'
+              ? 'on patrol'
+              : r.status === 'cooldown'
+                ? 'on cooldown'
+                : r.status === 'exhausted'
+                  ? 'exhausted — skipped'
+                  : r.status === 'no_chakra'
+                    ? 'not enough chakra'
+                    : r.status === 'dead' ? 'dead — skipped' : 'not dispatched';
+        results.push(`${EMO[shinobi] || '🥷'} ${escapeHtml(shinobi)}: ${label}`);
+      }
+      await clearMissionSelection(user.id);
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🏯 MISSION DISPATCHED', results),
+        hokageKeyboard(user.id),
         'hokage',
       );
       return true;
@@ -726,15 +923,15 @@ export async function handleMapCallback(cb) {
     if (action === 'map_patrol_pick' || action === 'map_patrol_select') {
       await answer(cb);
       await clearGateSelection(user.id);
-      const available = await availableShinobi(user.id);
+      const { available, busyNotes } = await getEligibleStatus(user.id, 'patrol');
       if (!available.length) {
         await showScreen(
           chatId,
           messageId,
           user,
           locBody('🚪 PATROL', [
-            'No available shinobi.',
-            'All units are on mission, patrol, or at BBQ.',
+            'No patrol-eligible shinobi available right now.',
+            ...(busyNotes.length ? ['', '<b>Status:</b>', ...busyNotes] : []),
           ]),
           gateKeyboard(user.id),
           'gate',
@@ -747,6 +944,7 @@ export async function handleMapCallback(cb) {
         user,
         locBody('🚪 SELECT SHINOBI', [
           'Tap to toggle selection, then Send on Patrol.',
+          ...(busyNotes.length ? ['', '<b>Unavailable:</b>', ...busyNotes] : []),
         ]),
         patrolPickKeyboard(user.id, available, new Set()),
         'gate',
@@ -758,7 +956,7 @@ export async function handleMapCallback(cb) {
       const shinobi = parts[1];
       await toggleGateSelection(user.id, shinobi);
       await answer(cb);
-      const available = await availableShinobi(user.id);
+      const { available, busyNotes } = await getEligibleStatus(user.id, 'patrol');
       const selected = await listGateSelection(user.id);
       await showScreen(
         chatId,
@@ -767,8 +965,36 @@ export async function handleMapCallback(cb) {
         locBody('🚪 SELECT SHINOBI', [
           `Selected: ${selected.size}`,
           'Tap to toggle, then Send on Patrol.',
+          ...(busyNotes.length ? ['', '<b>Unavailable:</b>', ...busyNotes] : []),
         ]),
         patrolPickKeyboard(user.id, available, selected),
+        'gate',
+      );
+      return true;
+    }
+
+    if (action === 'map_pall') {
+      await answer(cb);
+      const { available } = await getEligibleStatus(user.id, 'patrol');
+      const selected = await listGateSelection(user.id);
+      const allSelected = available.length > 0 && available.every((n) => selected.has(n));
+      if (allSelected) {
+        await clearGateSelection(user.id);
+      } else {
+        await selectAllGate(user.id, available);
+      }
+      const newSel = await listGateSelection(user.id);
+      const { available: av2, busyNotes } = await getEligibleStatus(user.id, 'patrol');
+      await showScreen(
+        chatId,
+        messageId,
+        user,
+        locBody('🚪 SELECT SHINOBI', [
+          `Selected: ${newSel.size}`,
+          'Tap to toggle, then Send on Patrol.',
+          ...(busyNotes.length ? ['', '<b>Unavailable:</b>', ...busyNotes] : []),
+        ]),
+        patrolPickKeyboard(user.id, av2, newSel),
         'gate',
       );
       return true;

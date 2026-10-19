@@ -16,7 +16,7 @@ import { fmt } from '../store.js';
 import { dueText } from './time.js';
 import {
   once, getShinobiState, ensureShinobiState, markDead, isDead,
-  getUserSkills, setUserSkills, getEquipped, isEquipped, ownedSet, activateProtection,
+  getUserSkills, setUserSkills, getEquipped, getEquippedList, isEquipped, ownedSet, activateProtection,
 } from './state.js';
 import {
   itachiRobPct, cloneWindowSec,
@@ -121,6 +121,7 @@ async function isOwner(id, shinobi) {
  * duplicate callbacks resolve at most once; kills/coins follow the winner.
  */
 export async function killTarget(attackerId, targetId, targetShinobi) {
+  if (targetShinobi === 'Starter Shinobi') return { code: 'already_dead', reviveAt: 0 };
   await db.run(sql`INSERT OR IGNORE INTO users (telegram_id, balance) VALUES (${attackerId}, 0)`);
   await db.run(sql`INSERT OR IGNORE INTO users (telegram_id, balance) VALUES (${targetId}, 0)`);
   await ensureShinobiState(targetId, targetShinobi);
@@ -326,7 +327,15 @@ export async function handleKill(message) {
     return true;
   }
 
-  if (isNarutoName(shinobi)) {
+  const eqList = await getEquippedList(target.id);
+  const hasNaruto = eqList.some((s) => isNarutoName(s)) || isNarutoName(shinobi);
+
+  if (shinobi === 'Starter Shinobi' && !hasNaruto) {
+    await replyText(message, '🛡️ Starter Shinobi cannot be killed.');
+    return true;
+  }
+
+  if (hasNaruto) {
     const pendingRow = await db.get(sql`
       SELECT id FROM clone_pending
       WHERE target_id = ${target.id} AND status IN ('pending', 'arming')
@@ -338,8 +347,6 @@ export async function handleKill(message) {
     const narutoSt = await getShinobiState(target.id, 'Naruto');
     const windowSec = cloneWindowSec(narutoSt ? narutoSt.level : 1);
     const t = now();
-    // Stay 'arming' with no expiry until the warning is actually delivered,
-    // so a failed or slow send cannot skip the countdown and kill immediately.
     const ins = await db.run(sql`
       INSERT INTO clone_pending (attacker_id, target_id, target_shinobi, chat_id, window_sec, expires_at, status, created_at)
       VALUES (${user.id}, ${target.id}, 'Naruto', ${message.chat.id}, ${windowSec}, 0, 'arming', ${t})
@@ -375,6 +382,28 @@ export async function handleKill(message) {
       SET status = 'pending', message_id = ${messageId}, expires_at = ${armedAt + windowSec}, window_sec = ${windowSec}
       WHERE id = ${pendingId} AND status = 'arming'
     `);
+
+    // Live countdown 5 -> 4 -> 3 -> 2 -> 1 -> 0
+    for (let s = windowSec - 1; s >= 0; s--) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const cur = await db.get(sql`SELECT status FROM clone_pending WHERE id = ${pendingId}`);
+      if (!cur || cur.status !== 'pending') break;
+      if (s > 0) {
+        const blocks = cloneBlocks({ id: pendingId, chatId: message.chat.id }, target, user.first_name || 'Shinobi', s);
+        try {
+          await api.editMessageText({
+            chat_id: message.chat.id,
+            message_id: messageId,
+            rich_message: { blocks, skip_entity_detection: true },
+          });
+        } catch (_) {}
+      } else {
+        const rRow = await db.get(sql`SELECT * FROM clone_pending WHERE id = ${pendingId}`);
+        if (rRow && rRow.status === 'pending') {
+          await resolveCloneTimeout(rRow);
+        }
+      }
+    }
     return true;
   }
 

@@ -52,10 +52,9 @@ export async function balanceText(message) {
 
   return (
     `🥷🏻 ${mention(user)}\n` +
-    `─────────────────⟢\n` +
     `🍥 Coins: ${fmt(bal)}${rank}\n` +
     `🔪 Kills: ${fmt(kills)}\n` +
-    `🥷 Shinobi Rank: ${rankOf(xp)[1]}\n` +
+    `🥷🏻 Shinobi Rank: ${rankOf(xp)[1]}\n` +
     `⚡ Chakra: ${fmt(chakra)}` +
     pendingLine
   );

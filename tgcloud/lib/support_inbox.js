@@ -5,7 +5,7 @@ import { api } from './message_api.js';
 import { ADMIN_IDS, SUPPORT_GROUP_ID, SUPPORT_USERS_TOPIC_ID } from './topic_config.js';
 import { escapeHtml } from './texts.js';
 
-const CONFIRMATION = 'Your message has been forwarded to 𝑨𝒘𝒘 𒉭 𝒔𝒉𝒆𝒆𝒔𝒉. Please wait for a reply.';
+const CONFIRMATION = 'ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜰᴏʀᴡᴀʀᴅᴇᴅ ᴛᴏ <a href="https://t.me/frozenblooded">𝑭𝒓❄️𝒛𝒆𝒏 𝑩𝒍𝒐𝒐𝒅𝒆𝒅</a>. ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ᴀ ʀᴇᴘʟʏ.';
 const isAuthorized = (userId) => ADMIN_IDS.includes(Number(userId));
 const nowSec = () => Math.floor(Date.now() / 1000);
 const BOT_USERNAME = 'exfrozen_bot';
@@ -287,21 +287,22 @@ async function refreshTopicIntro(userId, convo) {
   }
 }
 
-function supportMenuHtml(userId, convo) {
+function supportMenuHtml(userId, convo, user) {
   if (convo?.isBanned) {
     return `<p><b>💬 Contact owner</b></p><p>🚫 Your support access is currently blocked.</p><p>You can submit one unban request every 24 hours.</p><tg-button-row align="center"><tg-button type="callback_data" style="primary" data="si:request_unban:${userId}">📝 Request unban</tg-button></tg-button-row>`;
   }
-  const status = convo?.status === 'active' ? '🟢 Active' : convo?.status === 'paused' ? '⏸ Paused' : '⚪ Not started';
   const start = `<tg-button type="callback_data" style="success" data="si:start:${userId}">📨 Start / Resume</tg-button>`;
   const pause = `<tg-button type="callback_data" style="danger" data="si:pause:${userId}">⏸ Pause</tg-button>`;
-  return `<p><b>💬 Contact owner</b></p><p>Conversation status: ${status}</p><p>Choose an action:</p><tg-button-row align="center">${start}${pause}</tg-button-row>`;
+  const name = escapeHtml(user?.first_name || convo?.displayName || "there");
+  const mention = `<a href="tg://user?id=${userId}">${name}</a>`;
+  return `<p>Hoi! 👋 — ${mention}</p><p>Got a question, suggestion, or bug to report?</p><p>Tap Start Convo and send your message below! ❄️</p><tg-button-row align="center">${start}${pause}</tg-button-row>`;
 }
 
 async function sendSupportMenu(userId, user) {
   const convo = await getConversation(userId);
   return api.sendRichMessage({
     chat_id: userId,
-    rich_message: { html: supportMenuHtml(userId, convo) },
+    rich_message: { html: supportMenuHtml(userId, convo, user) },
   });
 }
 
@@ -312,7 +313,7 @@ async function updateSupportMenuMessage(cq, userId) {
     await api.editMessageText({
       chat_id: userId,
       message_id: cq.message.message_id,
-      rich_message: { html: supportMenuHtml(userId, convo) },
+      rich_message: { html: supportMenuHtml(userId, convo, cq?.from) },
     });
   } catch (_) {}
 }
@@ -456,7 +457,7 @@ async function refreshConversationProfile(user) {
 export async function handleSupportCommand(message) {
   const text = String(message.text || '').trim();
   const command = text.split(/[\s@]/)[0].toLowerCase();
-  if (command !== '/awwsheesh') return false;
+  if (command !== '/owner' && command !== '/awwsheesh') return false;
   // Intentionally swallow the command in groups; /awwsheesh remains silent there.
   if (message.chat?.type !== 'private') return true;
   if (!message.from || message.from.is_bot) return true;
@@ -513,7 +514,7 @@ async function handleOwnerSupportAction(cq, action, userId) {
       await api.sendRichMessage({
         chat_id: userId,
         rich_message: {
-          html: '<p><b>✅ The owner has restored your support access.</b></p><p>Use /awwsheesh or Contact Owner to start a new conversation.</p>',
+          html: '<p><b>✅ The owner has restored your support access.</b></p><p>Use /owner or Contact Owner to start a new conversation.</p>',
         },
       });
     } catch (error) {
@@ -548,7 +549,7 @@ async function handleOwnerSupportAction(cq, action, userId) {
       rich_message: {
         html: banned
           ? `<p><b>🚫 The owner has blocked your access to support.</b></p><p>While blocked, your messages will not be forwarded. You may request a review once every 24 hours.</p><tg-button-row align="center"><tg-button type="callback_data" style="primary" data="si:request_unban:${userId}">📝 Request unban</tg-button></tg-button-row>`
-          : '<p><b>✅ The owner has restored your support access.</b></p><p>Use /awwsheesh or Contact Owner to start a conversation.</p>',
+          : '<p><b>✅ The owner has restored your support access.</b></p><p>Use /owner or Contact Owner to start a conversation.</p>',
       },
     });
   } catch (error) {
@@ -690,7 +691,7 @@ export async function handleSupportCallback(cq) {
       await updateSupportMenuMessage(cq, userId);
       await api.sendRichMessage({
         chat_id: userId,
-        rich_message: { html: '<p>💬 Your support conversation is active. Send a message here whenever you need help.</p>' },
+        rich_message: { html: '<p><a href="https://t.me/frozenblooded">𝑭𝒓❄️𝒛𝒆𝒏 𝑩𝒍𝒐𝒐𝒅𝒆𝒅</a> is listening.<br>ꜱᴇɴᴅ ᴀ ᴍᴇꜱꜱᴀɢᴇ ʜᴇʀᴇ ᴡʜᴇɴᴇᴠᴇʀ ʏᴏᴜ ɴᴇᴇᴅ ʜᴇʟᴘ..</p>' },
       });
       return true;
     }
@@ -710,8 +711,8 @@ export async function handleSupportCallback(cq) {
       await api.sendRichMessage({
         chat_id: userId,
         rich_message: { html: paused
-          ? '<p>⏸ Your support conversation is paused. Resume with /awwsheesh or Contact Owner.</p>'
-          : '<p>🛑 Your support conversation is stopped. Restart with /awwsheesh or Contact Owner.</p>' },
+          ? '<p>⏸ ʏᴏᴜʀ ᴄᴏɴᴠᴇʀꜱᴀᴛɪᴏɴ with <a href="https://t.me/frozenblooded">𝑭𝒓❄️𝒛𝒆𝒏 𝑩𝒍𝒐𝒐𝒅𝒆𝒅</a> ɪꜱ ᴘᴀᴜꜱᴇᴅ. Use: /owner to resume.</p>'
+          : '<p>🛑 ʏᴏᴜʀ ᴄᴏɴᴠᴇʀꜱᴀᴛɪᴏɴ with <a href="https://t.me/frozenblooded">𝑭𝒓❄️𝒛𝒆𝒏 𝑩𝒍𝒐𝒐𝒅𝒆𝒅</a> ɪꜱ ꜱᴛᴏᴘᴘᴇᴅ. Use: /owner to resume.</p>' },
       });
       return true;
     }
@@ -947,7 +948,7 @@ export async function handleSupportAdminReply(message) {
       await api.sendRichMessage({
         chat_id: SUPPORT_GROUP_ID,
         message_thread_id: convo.threadId,
-        rich_message: { html: `<p>Support conversation ${status}. The user can reopen it with /awwsheesh → Start / Resume.</p>` },
+        rich_message: { html: `<p>Support conversation ${status}. The user can reopen it with /owner → Start / Resume.</p>` },
       });
       return true;
     }
@@ -986,7 +987,7 @@ export async function handleSupportAdminReply(message) {
     }
     if (targetLinks.length === 1) return handleLinkDirectedReply(message, context, targetLinks[0]);
 
-    if (convo && (convo.isBanned || convo.status !== 'active')) return true;
+    // User requirement: Owner replies are sent even if convo is paused or user is banned
     if (isSharedGroupTopic && !replyLink) {
       await api.sendMessage({
         chat_id: SUPPORT_GROUP_ID,

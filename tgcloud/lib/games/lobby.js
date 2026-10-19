@@ -512,6 +512,28 @@ export async function cancelLobby(lobbyId, userId) {
   return { ok: true, lobby: updated };
 }
 
+export async function abortRpsMatch(lobbyId, userId) {
+  const lobby = await getLobby(lobbyId);
+  if (!lobby) return { ok: false, error: "missing" };
+  if (lobby.status !== STATUS_PLAYING) return { ok: false, error: "state" };
+  if (lobby.game_type !== GAME_RPS) return { ok: false, error: "wrong_game" };
+
+  const players = (lobby.game_state?.players || []).map((p) => Number(p.id));
+  if (!players.includes(Number(userId))) {
+    return { ok: false, error: "not_participant" };
+  }
+
+  if (Number(lobby.stakes_reserved) === 1) await refundStakes(lobby);
+  const updated = await saveLobby(lobby, {
+    status: STATUS_CANCELLED,
+    result: RESULT_CANCEL,
+    winner_id: null,
+    current_turn: null,
+  });
+  await unbindLobby(updated);
+  return { ok: true, lobby: updated };
+}
+
 export async function abortXoxoMatch(lobbyId, userId) {
   const lobby = await getLobby(lobbyId);
   if (!lobby) return { ok: false, error: 'missing' };
@@ -783,11 +805,28 @@ export function renderLobby(lobby, viewerUser = null) {
     return { body, keyboard: boardKeyboard(lobby) };
   }
   if (lobby.status === STATUS_FINISHED) {
-    let msg = 'Finished.';
-    if (lobby.result === RESULT_DRAW) msg = 'Draw — stakes refunded.';
-    else if (lobby.result === RESULT_WIN) msg = `Winner takes pot: ${Number(lobby.pot).toLocaleString()} ${COIN}`;
-    else if (lobby.result === RESULT_TIMEOUT) msg = 'Timeout — pot awarded.';
-    const body = h(`${t} OVER`) + p(msg);
+    if (lobby.result === RESULT_WIN) {
+      let winnerUser = null;
+      if (lobby.winner_id) {
+        if (Number(lobby.winner_id) === Number(lobby.player_x_id)) {
+          winnerUser = { id: lobby.player_x_id, first_name: lobby.player_x_first_name, username: lobby.player_x_username };
+        } else if (Number(lobby.winner_id) === Number(lobby.player_o_id)) {
+          winnerUser = { id: lobby.player_o_id, first_name: lobby.player_o_first_name, username: lobby.player_o_username };
+        } else if (lobby.game_type === GAME_RPS) {
+          const pl = (lobby.game_state?.players || []).find((p) => Number(p.id) === Number(lobby.winner_id));
+          if (pl) winnerUser = pl;
+        }
+      }
+      const winMention = winnerUser ? mention(winnerUser) : "Winner";
+      const gName = gt === GAME_RPS ? "Rps" : "Xoxo";
+      const body = `<p><b>${gName} game over</b><br>Winner: ${winMention}<br>${Number(lobby.pot).toLocaleString()} 🍥 added to your account.</p>`;
+      return { body, keyboard: { inline_keyboard: [] } };
+    }
+    let msg = "Finished.";
+    if (lobby.result === RESULT_DRAW) msg = "Draw — stakes refunded.";
+    else if (lobby.result === RESULT_TIMEOUT) msg = "Timeout — pot awarded.";
+    const gName = gt === GAME_RPS ? "Rps" : "Xoxo";
+    const body = p(`<b>${gName} game over</b>`) + p(msg);
     return { body, keyboard: { inline_keyboard: [] } };
   }
   if (lobby.status === STATUS_CANCELLED) {
@@ -813,9 +852,20 @@ function renderRpsPlaying(lobby) {
   }
   if (gs.phase === 'revealed') {
     const res = gs.last_resolution || {};
-    const body = h(`${t} REVEAL`)
-      + p(res.type === 'win' ? `Winning move: <b>${res.winning_move}</b>` : 'Round draw')
-      + p(`Scores: ${JSON.stringify(gs.scores || {})}`);
+    const winMove = res.winning_move ? p(`Winning move: <b>${res.winning_move}</b>`) : (res.type === 'win' ? '' : p('Round draw'));
+    let winnerLine = '';
+    if (res.winner_id) {
+      const winPl = (gs.players || []).find((p) => Number(p.id) === Number(res.winner_id));
+      if (winPl) winnerLine = p(`Winner: ${mention(winPl)}`);
+    }
+    const scoreItems = [];
+    for (const pl of (gs.players || [])) {
+      const sc = gs.scores?.[String(pl.id)] ?? 0;
+      const nm = pl.first_name || pl.username || `User ${pl.id}`;
+      scoreItems.push(`${nm}: ${sc}`);
+    }
+    const scoresText = p(`Scores: ${scoreItems.join(', ')}`);
+    const body = h(`${t} REVEAL`) + winMove + winnerLine + scoresText;
     return { body, keyboard: rpsRevealKeyboard(lobby.lobby_id) };
   }
   return { body: h(t) + p('…'), keyboard: { inline_keyboard: [] } };
@@ -826,7 +876,8 @@ export function gamesListBody() {
     + p('<b>/xoxo</b> — Tic-Tac-Toe (2 players, stakes)')
     + p('<b>/rps</b> — Rock Paper Scissors (2–4 players)')
     + p('<b>/xoxo_stats</b> · <b>/rps_stats</b>')
-    + p('<b>/xoxo_cancel</b> — cancel a lobby or abort an active XOXO match (both stakes refunded)');
+    + p('❌ <b>/xoxo_cancel</b> — cancel lobby or abort match (stakes refunded)')
+    + p('❌ <b>/rps_cancel</b> — cancel lobby or abort match (stakes refunded)');
 }
 
 export function gamesKeyboard() {

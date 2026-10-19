@@ -15,7 +15,13 @@ export const P = (t) => ({ type: 'paragraph', text: typeof t === 'string' ? S(t)
 export const quote = (t) => ({ type: 'blockquote', blocks: String(t).split('\n').map((l) => P(l)) });
 export const table = (rows) => ({
   type: 'table', is_bordered: true, is_compact: true,
-  cells: rows.map((r) => r.map((c) => ({ text: S(c) }))),
+  cells: rows.map((r) => r.map((c) => {
+    if (c && typeof c === 'object') {
+      if (c.text) return c;
+      return { text: c };
+    }
+    return { text: S(c) };
+  })),
 });
 const code = (t) => ({ type: 'code', text: t });
 const mentionNode = (u) => ({
@@ -93,7 +99,12 @@ export async function storeContent(screen, ownerId, options = {}) {
   });
   if (screen === 'jutsu') {
     const rows = [['Item', 'Price']];
-    for (const i of JUTSU) rows.push([`${i.emoji} ${i.name}`, `${fmt(i.price)} 🍥`]);
+    for (const i of JUTSU) {
+      rows.push([
+        { text: [`${i.emoji} `, { type: 'code', text: i.name }] },
+        `${fmt(i.price)} 🍥`,
+      ]);
+    }
     return [
       P('🌀 𝐉𝐔𝐓𝐒𝐔'),
       table(rows),
@@ -102,7 +113,10 @@ export async function storeContent(screen, ownerId, options = {}) {
     ];
   }
   if (screen === 'chakra') {
-    const rows = [['Item', 'Price'], ['⚡ Chakra × 100', `${fmt(100 * CHAKRA_RATE)} 🍥`]];
+    const rows = [
+      ['Item', 'Price'],
+      [{ text: ['⚡ ', { type: 'code', text: 'Chakra' }, ' × 100'] }, `${fmt(100 * CHAKRA_RATE)} 🍥`],
+    ];
     return [
       P('⚡ 𝐂𝐇𝐀𝐊𝐑𝐀'),
       table(rows),
@@ -114,7 +128,12 @@ export async function storeContent(screen, ownerId, options = {}) {
   const balRow = await db.get(sql`SELECT balance FROM users WHERE telegram_id = ${ownerId}`);
   const balance = balRow ? balRow.balance : 0;
   const rows = [['Item', 'Price']];
-  for (const i of SHINOBI) rows.push([`${i.emoji} ${i.name}`, `${fmt(i.price)} 🍥`]);
+  for (const i of SHINOBI) {
+    rows.push([
+      { text: [`${i.emoji} `, { type: 'code', text: i.name }] },
+      `${fmt(i.price)} 🍥`,
+    ]);
+  }
 
   const buttons = [
     row(btn('Jutsu', cb('jutsu')), btn('Chakra', cb('chakra'))),
@@ -129,7 +148,7 @@ export async function storeContent(screen, ownerId, options = {}) {
     P(`🍥 Balance: ${fmt(balance)}`),
     P('⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈'),
     table(rows),
-    P('Use /equip &lt;name&gt; · /unequip &lt;name&gt; (max 3 equipped)'),
+    P('ᴜꜱᴇ /equip <shinobi name> & /unequip & <shinobi name> .\n (ᴍᴀx 3 active shinobis can be ᴇǫᴜɪᴘᴘᴇᴅ, rest shinobis will be passive.)'),
     ...footer(),
     ...buttons,
   ];

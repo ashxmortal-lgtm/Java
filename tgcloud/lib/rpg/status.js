@@ -73,7 +73,16 @@ export async function collectStatus(telegramId) {
     const extras = [];
     let primary;
 
-    if (isDead(state, t)) {
+    if (name === 'Starter Shinobi') {
+      if (act && act.status === 'active' && act.ends_at > t) {
+        const label = `${ACT_WORD[act.kind] || 'Activity'}`;
+        primary = { key: act.kind, icon: act.kind === 'mission' ? '⚔️' : '🏃', label, due: dueText(act.ends_at, t), dueAt: act.ends_at };
+      } else if (isExhausted(state, t)) {
+        primary = { key: 'exhausted', icon: '🔥', label: 'Exhausted', due: `Ready at ${dueText(state.exhaustedUntil, t)}`, dueAt: state.exhaustedUntil };
+      } else {
+        primary = { key: 'ready', icon: '🟢', label: 'Ready', due: null, dueAt: 0 };
+      }
+    } else if (isDead(state, t)) {
       primary = { key: 'dead', icon: '☠️', label: 'Dead', due: dueText(state.deadUntil, t), dueAt: state.deadUntil };
     } else if (act && act.status === 'active' && act.ends_at > t) {
       const label = `${ACT_WORD[act.kind] || 'Activity'}`;
