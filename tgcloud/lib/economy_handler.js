@@ -32,6 +32,7 @@ import {
 } from '../lib/rpg/combat.js';
 import { handleSearchTsuna } from '../lib/rpg/tsunade.js';
 import { send, sweepMessages, trackUser } from './chat.js';
+import { groupChatLink } from './telegram_links.js';
 
 const BOT_USERNAME = 'exfrozen_bot';
 
@@ -171,8 +172,14 @@ export async function handleEconomyCommand(message, ctx) {
       await richOr(message.chat.id, user, abilityContent(user.id), () =>
         reply(message, abilityText(), { reply_markup: abilityKeyboard(user.id) }));
     } else if (cmd === 'shinobi_store') {
-      await richOr(message.chat.id, user, await storeContent('main', user.id), () =>
-        reply(message, screenText('main'), { reply_markup: screenKeyboard('main', user.id) }));
+      if (message.chat.type === 'private') {
+        await reply(message, screenText('main', await getBalance(user.id)), {
+          reply_markup: screenKeyboard('main', user.id, { includeMiniApp: true }),
+        });
+      } else {
+        await richOr(message.chat.id, user, await storeContent('main', user.id), () =>
+          reply(message, screenText('main'), { reply_markup: screenKeyboard('main', user.id) }));
+      }
     } else if (cmd === 'mission' || cmd === 'patrol') {
       if (message.chat.type === 'private') {
         await richOr(message.chat.id, user, groupOnlyContent(cmd), () =>
@@ -229,13 +236,7 @@ export async function handleEconomyCommand(message, ctx) {
         parse_mode: 'HTML',
       });
     } else if (cmd === 'profile') {
-      const profileAppButton = message.chat.type === 'private'
-        ? { reply_markup: { inline_keyboard: [[{
-          text: 'Open Profile Mini App',
-          web_app: { url: 'https://app8868570312.tgcloud.ai/profile' },
-        }]] } }
-        : {};
-      await reply(message, await profileText(user), profileAppButton);
+      await reply(message, await profileText(user));
     } else if (cmd === 'transfer') {
       await handleTransfer(message, text);
     } else if (cmd === 'leaderboard' || cmd === 'lb') {
@@ -267,6 +268,14 @@ async function classicEdit(msg, text, markup) {
   } catch (e) {
     if (!(e instanceof BotApiError && e.code === 400)) throw e;
   }
+}
+
+async function editStoreScreen(msg, user, screen) {
+  const balance = screen === 'main' ? await getBalance(user.id) : null;
+  const markup = screenKeyboard(screen, user.id, {
+    includeMiniApp: msg.chat.type === 'private' && screen === 'main',
+  });
+  return classicEdit(msg, render(user, screenText(screen, balance)), markup);
 }
 
 export async function handleEconomyCallback(cb) {
@@ -346,13 +355,21 @@ export async function handleEconomyCallback(cb) {
         }
         await answer(`${item.name} recruited for ${fmt(item.price)} 🍥! ✅`);
       }
-      await editRichOr(msg, cb.from, await storeContent('main', cb.from.id), () =>
-        classicEdit(msg, render(cb.from, screenText('main')), screenKeyboard('main', cb.from.id)));
+      if (msg.chat.type === 'private') {
+        await editStoreScreen(msg, cb.from, 'main');
+      } else {
+        await editRichOr(msg, cb.from, await storeContent('main', cb.from.id), () =>
+          classicEdit(msg, render(cb.from, screenText('main')), screenKeyboard('main', cb.from.id)));
+      }
       return true;
     }
     if (isStore) {
-      await editRichOr(msg, cb.from, await storeContent(a, cb.from.id), () =>
-        classicEdit(msg, render(cb.from, screenText(a)), screenKeyboard(a, cb.from.id)));
+      if (msg.chat.type === 'private') {
+        await editStoreScreen(msg, cb.from, a);
+      } else {
+        await editRichOr(msg, cb.from, await storeContent(a, cb.from.id), () =>
+          classicEdit(msg, render(cb.from, screenText(a)), screenKeyboard(a, cb.from.id)));
+      }
     } else if (a === 'up') {
       await editRichOr(msg, cb.from, await levelsContent(cb.from), async () =>
         classicEdit(msg, await levelsText(cb.from), backKeyboard(cb.from.id)));
@@ -403,19 +420,19 @@ async function handleTransfer(message, text) {
   }
   await adjustBalance(user.id, -amount);
   await adjustBalance(replied.id, amount);
-  const grpName = chat.title || 'group';
+  const grpName = groupChatLink(chat, message.message_id);
   await reply(message, `✅ Transferred ${fmt(amount)} 🍥 to ${mentionFn(replied)}.`);
   try {
     await api.sendMessage({
       chat_id: replied.id,
-      text: style(`${mentionFn(user)} transferred ${fmt(amount)} 🍥 in ${escapeHtml(grpName)}\nUse: /balance to check`),
+      text: style(`${mentionFn(user)} transferred ${fmt(amount)} 🍥 in ${grpName}\nUse: /balance to check`),
       parse_mode: 'HTML',
     });
   } catch (_) {}
   try {
     await api.sendMessage({
       chat_id: user.id,
-      text: style(`${mentionFn(user)}, ${fmt(amount)} 🍥 deducted from your account.\nYou transferred konoha coins to ${mentionFn(replied)} in ${escapeHtml(grpName)}`),
+      text: style(`${mentionFn(user)}, ${fmt(amount)} 🍥 deducted from your account.\nYou transferred konoha coins to ${mentionFn(replied)} in ${grpName}`),
       parse_mode: 'HTML',
     });
   } catch (_) {}
@@ -437,8 +454,8 @@ async function handleLeaderboard(message) {
     if (!rows || !rows.length) body += 'No data yet.';
     else {
       rows.forEach((r, i) => {
-        const name = r.username ? `@${r.username}` : (r.first_name || r.id);
-        body += `${i + 1}. ${escapeHtml(String(name))} — ${fmt(r.balance)} 🍥\n`;
+        const label = r.username ? `@${r.username}` : (r.first_name || r.id);
+        body += `${i + 1}. ${mentionFn({ id: r.id, first_name: String(label) })} — ${fmt(r.balance)} 🍥\n`;
       });
     }
     await send(message.chat.id, {
@@ -464,8 +481,8 @@ async function sendGlobalLeaderboard(chatId) {
   if (!rows || !rows.length) body += 'No data yet.';
   else {
     rows.forEach((r, i) => {
-      const name = r.username ? `@${r.username}` : (r.first_name || r.id);
-      body += `${i + 1}. ${escapeHtml(String(name))} — ${fmt(r.balance)} 🍥\n`;
+      const label = r.username ? `@${r.username}` : (r.first_name || r.id);
+      body += `${i + 1}. ${mentionFn({ id: r.id, first_name: String(label) })} — ${fmt(r.balance)} 🍥\n`;
     });
   }
   await send(chatId, { text: style(body), parse_mode: 'HTML' });

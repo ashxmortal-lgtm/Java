@@ -6,7 +6,7 @@ import { listCommands } from './command_registry.js';
 import { groupAdmins as GA } from '../schema.js';
 import { sql } from 'sdk/db';
 import { getEquipped } from './rpg/state.js';
-import { handleStudyHub, buildStudyStatsBlocks } from './study/hub.js';
+import { buildStudyStatsBlocks } from './study/hub.js';
 
 const bold = (text) => ({ type: 'bold', text });
 const para = (...t) => ({ type: 'paragraph', text: t.length === 1 ? t[0] : t });
@@ -259,6 +259,23 @@ async function editTo(cq, blocks) {
   });
 }
 
+function plainRichText(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(plainRichText).join('');
+  if (!value || typeof value !== 'object') return '';
+  if (value.type === 'text_mention' || value.type === 'url') return String(value.text || '');
+  return plainRichText(value.text ?? value.blocks ?? '');
+}
+
+function plainStudyStats(blocks) {
+  return (blocks || []).map((block) => {
+    if (!block || typeof block !== 'object') return '';
+    if (block.type === 'divider') return '────────────';
+    if (block.type === 'heading' || block.type === 'paragraph') return plainRichText(block.text);
+    return '';
+  }).filter(Boolean).join('\n');
+}
+
 export async function handleWelcomeCallback(cq) {
   const data = cq.data || '';
   const isHelp = data.startsWith('hp:');
@@ -285,17 +302,18 @@ export async function handleWelcomeCallback(cq) {
     if (screen === 'study') {
       // Show all-time study stats (use /study for the hub)
       await api.answerCallbackQuery({ callback_query_id: cq.id });
+      let stats;
       try {
-        const stats = await buildStudyStatsBlocks(cq.from);
+        stats = await buildStudyStatsBlocks(cq.from);
         await editTo(cq, stats);
       } catch (e) {
         console.error('study stats failed:', e?.description || e);
-        // Fallback to study hub
-        await handleStudyHub({
-          chat: cq.message.chat,
-          from: cq.from,
+        await api.editMessageText({
+          chat_id: cq.message.chat.id,
           message_id: cq.message.message_id,
-          message_thread_id: cq.message.message_thread_id,
+          text: stats
+            ? (plainStudyStats(stats) || 'Study stats are temporarily unavailable. Tap Study mode again to retry.')
+            : 'Study stats are temporarily unavailable. Tap Study mode again to retry.',
         });
       }
       return true;

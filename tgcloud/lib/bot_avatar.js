@@ -5,18 +5,10 @@
  * refuses, so the UI falls back to the snowflake.
  */
 import { api } from './message_api.js';
+import { asUint8Array, bytesToBase64 } from './base64.js';
 
 const TTL_MS = 60 * 60 * 1000;
 let cache = { at: 0, value: '' };
-
-function toBase64(bytes) {
-  let bin = '';
-  const step = 0x8000;
-  for (let i = 0; i < bytes.length; i += step) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
-  }
-  return btoa(bin);
-}
 
 async function findFileId(botId) {
   try {
@@ -43,9 +35,9 @@ export async function botAvatarDataUri() {
     const me = await api.getMe();
     const fileId = await findFileId(me.id);
     if (fileId) {
-      const bytes = await api.getFileContent(fileId);
-      if (bytes && bytes.length && bytes.length < 400 * 1024) {
-        value = `data:image/jpeg;base64,${toBase64(bytes)}`;
+      const bytes = asUint8Array(await api.getFileContent(fileId));
+      if (bytes && bytes.byteLength > 0 && bytes.byteLength < 400 * 1024) {
+        value = `data:image/jpeg;base64,${bytesToBase64(bytes)}`;
       }
     }
   } catch (e) {

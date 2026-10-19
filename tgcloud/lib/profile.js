@@ -7,7 +7,7 @@ import { fmt } from './store.js';
 import { mention, style } from './texts.js';
 import { rankOf } from './activities.js';
 import { botAvatarDataUri } from './bot_avatar.js';
-import { getEquippedList, getEquipped, getShinobiState, isDead } from './rpg/state.js';
+import { getEquippedList, getEquipped, getAllShinobiState, isDead } from './rpg/state.js';
 import { dueText } from './rpg/time.js';
 
 const EMO = {
@@ -74,14 +74,15 @@ export async function profileData(user) {
     ? `${fmt(xp)} / ${fmt(nextXp)} XP → ${nextLabel}`
     : `${fmt(xp)} XP (Kage)`;
 
-  // Life status of the equipped shinobi (shown under the name in the Mini App).
+  // Present death as the user's status, not as a particular roster shinobi.
   let life = { alive: true, label: 'Alive', equipped: 'Starter Shinobi' };
   try {
     const equipped = await getEquipped(id);
-    const st = await getShinobiState(id, equipped);
+    const states = await getAllShinobiState(id);
     const t = Math.floor(Date.now() / 1000);
-    life = isDead(st, t)
-      ? { alive: false, label: `Dead · revives ${dueText(st.deadUntil, t)}`, equipped }
+    const deadUntil = Math.max(0, ...Object.values(states).filter((st) => isDead(st, t)).map((st) => Number(st.deadUntil) || 0));
+    life = deadUntil > t
+      ? { alive: false, label: `Dead · revives ${dueText(deadUntil, t)}`, equipped }
       : { alive: true, label: 'Alive', equipped };
   } catch (_) { /* keep default */ }
   let botAvatar = '';

@@ -6,7 +6,7 @@ import { style, escapeHtml } from './texts.js';
 import { SHINOBI, JUTSU, CHAKRA_RATE, boldNum, fmt } from './store.js';
 import { OWNER_ID } from './admin.js';
 import { send, sendRich } from './chat.js';
-import { ownedSet, getEquipped, getAllShinobiState } from './rpg/state.js';
+import { getEquipped, getAllShinobiState } from './rpg/state.js';
 
 // ---- block shapes (the only place to fix if Telegram rejects one) ----
 const S = (t) => style(t);
@@ -73,6 +73,12 @@ const footer = () => [
   P('🛒 /buy [item name]'),
   P('tap an item name to copy it.'),
 ];
+const copyRows = (names) => {
+  const buttons = names.map((name) => btn(name, { copy_text: { text: name }, style: 'transparent' }));
+  const rows = [];
+  for (let i = 0; i < buttons.length; i += 2) rows.push(row(...buttons.slice(i, i + 2)));
+  return rows;
+};
 
 // Short skill notes — only skills already defined in the game.
 const SKILL_NOTES = {
@@ -84,38 +90,30 @@ const SKILL_NOTES = {
 };
 
 /**
- * Shinobi Store with live balance, ownership markers, levels and
- * Buy / Owned / Equip buttons. Async — callers must await it.
+ * Shinobi Store with live balance and exact copy-text controls. Async — callers must await it.
  */
-export async function storeContent(screen, ownerId) {
-  const cb = (s) => ({ callback_data: `store:${s}:${ownerId}` });
+export async function storeContent(screen, ownerId, options = {}) {
+  const cb = (s) => ({
+    callback_data: `store:${s}:${ownerId}`,
+    ...(options.fromMap ? { style: 'transparent' } : {}),
+  });
   if (screen === 'jutsu') {
     return [
-      P('🌀 𝐉𝐔𝐓𝐒𝐔'), jutsuQuote(), ...footer(), row(btn('Back', cb('main'))),
+      P('🌀 𝐉𝐔𝐓𝐒𝐔'), jutsuQuote(), ...copyRows(JUTSU.map((item) => item.name)), ...footer(), row(btn('Back', cb('main'))),
     ];
   }
   if (screen === 'chakra') {
     return [
       P('⚡ 𝐂𝐇𝐀𝐊𝐑𝐀'),
       quote(`✦ Chakra × 100 : ${boldNum(100 * CHAKRA_RATE)} 🍥`),
+      ...copyRows(['Chakra']),
       ...footer(), row(btn('Back', cb('main'))),
     ];
   }
 
   const balRow = await db.get(sql`SELECT balance FROM users WHERE telegram_id = ${ownerId}`);
   const balance = balRow ? balRow.balance : 0;
-  const own = await ownedSet(ownerId);
-
-  // Clean store: name + price only (equip via /equip). Buy buttons for unowned.
-  const lines = [];
-  const buttons = [];
-  for (const i of SHINOBI) {
-    const isOwned = own.has(i.name);
-    lines.push(`✦ <b>${escapeHtml(i.name)}</b> ${i.emoji} : ${boldNum(i.price)} 🍥`);
-    if (!isOwned) {
-      buttons.push([btn(`Buy ${i.name}`, { callback_data: `sb:${i.name}:${ownerId}` })]);
-    }
-  }
+  const lines = SHINOBI.map((i) => `✦ <b>${escapeHtml(i.name)}</b> ${i.emoji} : ${boldNum(i.price)} 🍥`);
 
   return [
     P('🏯 𝐒𝐇𝐈𝐍𝐎𝐁𝐈 𝐒𝐓𝐎𝐑𝐄'),
@@ -124,7 +122,7 @@ export async function storeContent(screen, ownerId) {
     P('⚔️ 𝐒𝐇𝐈𝐍𝐎𝐁𝐈'),
     quote(lines.join('\n')),
     P('Use /equip &lt;name&gt; · /unequip &lt;name&gt; (max 3 equipped)'),
-    ...buttons.map((b) => row(...b)),
+    ...copyRows(SHINOBI.map((item) => item.name)),
     ...footer(),
     row(btn('Jutsu', cb('jutsu')), btn('Chakra', cb('chakra'))),
   ];

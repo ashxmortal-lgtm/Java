@@ -2,7 +2,7 @@ import { BotApiError } from 'sdk';
 import { api } from '../message_api.js';
 import { style } from '../texts.js';
 import { MINI_APP_TRACKER_URL } from '../config.js';
-import { sendBlocks, mention, head, para, divider, row, rp, SHEESH } from './common.js';
+import { sendBlocks, mention, head, para, divider, row, rp } from './common.js';
 
 const BOT_USERNAME = 'exfrozen_bot';
 
@@ -43,7 +43,6 @@ export async function handleStudyHub(message) {
     para('🔗 /hnc — ᴏᴘᴇɴꜱ ʜɪᴅᴅᴇɴ ɴᴇᴇᴛ ᴄᴏᴍᴍᴜɴɪᴛʏ ʟɪɴᴋꜱ ᴀɴᴅ ꜱᴛᴜᴅʏ ᴍᴀᴛᴇʀɪᴀʟ'),
     para('📚 /study — ᴛᴏ ᴏᴘᴇɴ ᴛʜɪꜱ ᴍᴇɴᴜ ᴀɴʏᴡʜᴇʀᴇ'),
     divider,
-    SHEESH,
     row(trackerButton(message.chat)),
   ];
   const opts = { ...rp(message.message_id), skipEntities: false };
