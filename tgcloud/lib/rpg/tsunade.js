@@ -195,3 +195,23 @@ async function sendDiscoveryMessage(chatId, user) {
     console.error('[tsunade discovery]', e?.description || e);
   }
 }
+
+export async function sweepTsunadeSearches() {
+  const t = now();
+  const due = await db.all(sql`
+    SELECT telegram_id, total_searches, status, ends_at FROM tsunade_search
+    WHERE status = 'active' AND ends_at <= ${t} LIMIT 10
+  `);
+  for (const row of due || []) {
+    try {
+      const u = await db.get(sql`SELECT first_name, username FROM users WHERE telegram_id = ${row.telegram_id}`);
+      const user = { id: row.telegram_id, first_name: u?.first_name || 'Shinobi', username: u?.username };
+      const report = await resolveSearch(row.telegram_id, { totalSearches: row.total_searches || 1 }, user);
+      if (report) {
+        await send(row.telegram_id, { text: style(report), parse_mode: 'HTML' });
+      }
+    } catch (e) {
+      console.error('[sweepTsunadeSearches]', e);
+    }
+  }
+}

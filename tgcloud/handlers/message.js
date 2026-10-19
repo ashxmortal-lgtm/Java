@@ -67,7 +67,7 @@ export default async function (message, ctx) {
     .replace(/^\/+/, '')
     .toLowerCase();
 
-  if (gameCmd === 'xoxo_cancel' || gameCmd === 'cancel_xoxo') {
+  if (gameCmd === 'xoxo_cancel' || gameCmd === 'cancel_xoxo' || gameCmd === 'rps_cancel' || gameCmd === 'cancel_rps') {
     return await handleCancelCommand(message);
   }
 

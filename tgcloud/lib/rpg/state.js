@@ -60,6 +60,7 @@ export async function getAllShinobiState(telegramId) {
 }
 
 export function isDead(state, t = now()) {
+  if (state?.shinobi === 'Starter Shinobi') return false;
   return !!state && (state.deadUntil || 0) > t;
 }
 export function isExhausted(state, t = now()) {

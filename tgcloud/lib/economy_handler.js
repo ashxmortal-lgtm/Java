@@ -1,3 +1,5 @@
+import { sweepTsunadeSearches } from "./rpg/tsunade.js";
+import { handleRedeemCoupon } from "./coupons.js";
 // Economy commands + store/level-up buttons, restored from the old handlers.
 // /start /help /claim /balance /inventory /shinobi_store /buy /mission /patrol /ability /addcoins /backup
 import { runBackup, runFullBackup } from "./backup.js";
@@ -63,6 +65,7 @@ function claimBody(r) {
 
 // Finished missions/patrols: group reminder + short DM + claim button.
 async function announceDone() {
+  try { await sweepTsunadeSearches(); } catch (e) { console.error(e); }
   for (const r of await sweepActivities()) {
     const who = { id: r.id, first_name: r.name };
     const claimKb = {
@@ -247,6 +250,8 @@ export async function handleEconomyCommand(message, ctx) {
       await handleEquip(message, text);
     } else if (cmd === 'unequip') {
       await handleUnequip(message, text);
+    } else if (cmd === 'redeem') {
+      await handleRedeemCoupon(message, text);
     }
   } catch (e) {
     console.error(e);
@@ -427,7 +432,7 @@ async function handleTransfer(message, text) {
   try {
     await api.sendMessage({
       chat_id: replied.id,
-      text: style(`${mentionFn(user)} transferred ${fmt(amount)} 🍥 in ${grpName}\nUse: /balance to check`),
+      text: style(`🕸️ transferred ${fmt(amount)} 🍥 to your account.\nGrp name:  ${grpName}\nUse: /balance to check`),
       parse_mode: 'HTML',
     });
   } catch (_) {}

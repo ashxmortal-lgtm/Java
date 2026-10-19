@@ -138,18 +138,20 @@ export async function buildWelcomeBlocks(user) {
   const botLink = `https://t.me/${uname}`;
   return [
     para(mention(user), ' ᴡᴇʟᴄᴏᴍᴇ!'),
-    para(urlText(BOT_NAME, botLink), ' ʙᴏᴛ has ɴᴀʀᴜᴛᴏ ɪɴꜱᴘɪʀᴇᴅ ɢᴀᴍᴇ ꜰᴏʀ ɢʀᴏᴜᴘꜱ ᴀɴᴅ ᴀɴɪᴍᴇ ꜰᴀɴꜱ.'),
-    para('Also this bot has study features exclusively for NEET aspirants. (Check in help menu)'),
-    para('/daily : ᴄʟᴀɪᴍ ᴅᴀɪʟʏ ꜱʜɪɴᴏʙɪ ᴄᴏɪɴꜱ 🍥'),
-    para('ʏᴏᴜʀ ᴍɪɴɪ ᴘʀᴏꜰɪʟᴇ:'),
-    blockquote(
-      `ᴇǫᴜɪᴘᴘᴇᴅ ꜱʜɪɴᴏʙɪ: ${mp.equipped}`,
-      `ʙᴀʟᴀɴᴄᴇ : ${Number(mp.balance).toLocaleString('en-US')}`,
-      `ᴏᴡɴᴇᴅ ᴊᴜᴛꜱᴜ: ${mp.jutsu}`,
-      `ᴋɪʟʟꜱ: ${mp.kills}`,
-      `ɢʟᴏʙᴀʟ ʀᴀɴᴋ: ${mp.rank}`,
+    para(
+      urlText(BOT_NAME, botLink),
+      ' is a Naruto-inspired game bot for groups and anime fans, with exclusive study features for NEET aspirants. Check the Help menu to explore them!',
     ),
-    para('ᴀᴅᴅ ', urlText(BOT_NAME, botLink), ' ᴛᴏ ʏᴏᴜʀ ɢʀᴘ ᴀꜱ ᴀᴅᴍɪɴ ᴛᴏ ꜱᴛᴀʀᴛ ᴘʟᴀʏɪɴɢ.'),
+    para('/daily — Claim your daily shinobi coins 🍥'),
+    para('ʏᴏᴜʀ ᴍɪɴɪ ᴘʀᴏꜰɪʟᴇ'),
+    blockquote(
+      `🥷 Shinobi: ${mp.equipped}`,
+      `🍥 Balance: ${Number(mp.balance).toLocaleString('en-US')}`,
+      `⚡ Owned Jutsu: ${mp.jutsu}`,
+      `⚔️ Kills: ${mp.kills}`,
+      `🏆 Global Rank: ${mp.rank}`,
+    ),
+    para('Add ', urlText(BOT_NAME, botLink), ' to your group as an admin to begin your shinobi journey!'),
     ...buttons,
   ];
 }
@@ -217,6 +219,7 @@ function moreGamesBlocks(w) {
     para('/xoxo_stats — View XOXO stats'),
     para('/rps — Play Rock Paper Scissors'),
     para('/rps_stats — View RPS stats'),
+    para('/rps_cancel — Cancel RPS lobby'),
     backBtn(`hp:game${sfx(w)}`),
   ];
 }
@@ -252,11 +255,24 @@ export async function sendWelcome(chatId, user) {
 }
 
 async function editTo(cq, blocks) {
-  await api.editMessageText({
-    chat_id: cq.message.chat.id,
-    message_id: cq.message.message_id,
-    rich_message: rich(blocks),
-  });
+  try {
+    await api.editMessageText({
+      chat_id: cq.message.chat.id,
+      message_id: cq.message.message_id,
+      rich_message: { blocks: Array.isArray(blocks) ? blocks : blocks?.blocks || [], skip_entity_detection: true },
+    });
+  } catch (e) {
+    if (Array.isArray(blocks)) {
+      const text = plainStudyStats(blocks);
+      await api.editMessageText({
+        chat_id: cq.message.chat.id,
+        message_id: cq.message.message_id,
+        text,
+      });
+      return;
+    }
+    throw e;
+  }
 }
 
 function plainRichText(value) {
@@ -300,42 +316,34 @@ export async function handleWelcomeCallback(cq) {
     const [, screen, flag] = data.split(':');
     const w = flag === 'w';
     if (screen === 'study') {
-      // Show all-time study stats (use /study for the hub)
       await api.answerCallbackQuery({ callback_query_id: cq.id });
       try {
         const stats = await buildStudyStatsBlocks(cq.from);
         await editTo(cq, stats);
       } catch (e) {
         console.error('study stats failed:', e?.description || e);
-        // Fallback plain text matching the intended layout
         try {
-          const { getStudyCoins } = await import('./economy.js');
-          const coins = await getStudyCoins(cq.from.id).catch(() => 0);
           const text =
-            `📚 𝐒𝐓𝐔𝐃𝐘 𝐒𝐓𝐀𝐓𝐒\n` +
             `🥷🏼: ${cq.from.first_name || 'Shinobi'}\n` +
-            `─────────────────\n` +
-            `Revised chapters: —\n` +
-            `Practiced chapters: —\n` +
-            `PYQs chapterwise: —\n` +
-            `Completed todos: —\n` +
-            `Coins earned through study mode: ${Number(coins).toLocaleString('en-US')} 🍥\n` +
-            `Completed chapters: —\n` +
-            `(Including revision, practice & pyq all done per chap)\n` +
-            `─────────────────\n` +
-            `Use: /study to open study hub`;
+            `#\n` +
+            `Revised chapters: \n` +
+            `Practiced chapter: \n` +
+            `PYQs chapterwise: \n` +
+            `completed todo: \n` +
+            `Coins earned through study mode: \n` +
+            `Completed chapters : \n` +
+            `(Including revision,practice & pyq all done per chap)\n` +
+            `#\n\n` +
+            `Use: /study to open study hub.`;
           await api.editMessageText({
             chat_id: cq.message.chat.id,
             message_id: cq.message.message_id,
             text,
+            reply_markup: {
+              inline_keyboard: [[{ text: '← Back', callback_data: `hp:home${sfx(w)}`, style: 'danger' }]],
+            },
           });
-        } catch (_) {
-          await api.editMessageText({
-            chat_id: cq.message.chat.id,
-            message_id: cq.message.message_id,
-            text: 'Study stats are temporarily unavailable. Tap Study mode again to retry.',
-          }).catch(() => {});
-        }
+        } catch (_) {}
       }
       return true;
     }

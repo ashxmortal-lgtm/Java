@@ -1,3 +1,4 @@
+import { handleCreateCoupon, handleListCoupons, handleEditCoupon } from "./coupons.js";
 import { db, BotApiError } from 'sdk';
 import { api } from './message_api.js';
 import { eq } from 'sdk/db';
@@ -27,11 +28,21 @@ const urlText = (text, url) => ({ type: 'url', text, url });
 const PAGE = 8;
 const nowSec = () => Math.floor(Date.now() / 1000);
 
-async function sayRich(chatId, blocks) {
+async function sayRich(chatId, blocks, fallbackText = null) {
   try {
-    return await api.sendRichMessage({ chat_id: chatId, rich_message: rich(blocks) });
+    return await api.sendRichMessage({
+      chat_id: chatId,
+      rich_message: { blocks, skip_entity_detection: true },
+    });
   } catch (e) {
     console.error('sayRich failed:', e?.description || e);
+    if (fallbackText) {
+      return await api.sendMessage({
+        chat_id: chatId,
+        text: fallbackText,
+        parse_mode: 'HTML',
+      });
+    }
     throw e;
   }
 }
@@ -131,10 +142,18 @@ async function handleStats(message) {
   const from = message.from;
   if (!from) return true;
   if (from.id !== OWNER_ID) {
-    await sayRich(message.chat.id, deniedBlocks(from));
+    await sayRich(message.chat.id, deniedBlocks(from), '⛔ Only the bot owner can use this command.');
     return true;
   }
-  await sayRich(message.chat.id, statsBlocks(from, await computeStats()));
+  const counts = await computeStats();
+  const blockedLine = counts.blockedTracked ? String(counts.blocked) : 'Not tracked';
+  const plainText =
+    `📊 <b>BOT STATISTICS</b>\n\n` +
+    `👤 Users Started: <b>${counts.started}</b>\n` +
+    `🚫 Users Blocked: <b>${blockedLine}</b>\n` +
+    `👥 Groups: <b>${counts.groups}</b>\n\n` +
+    `<i>Data from the bot’s records.</i>`;
+  await sayRich(message.chat.id, statsBlocks(from, counts), plainText);
   return true;
 }
 
@@ -223,6 +242,9 @@ export async function handleOwnerCommand(message) {
   const cmd = text.split(/[\s@]/)[0].toLowerCase();
   if (cmd === '/stats') return handleStats(message);
   if (cmd === '/groups' || cmd === '/approved_list') return handleGroupsList(message);
+  if (cmd === '/create_cc') return handleCreateCoupon(message, text);
+  if (cmd === '/list_cc') return handleListCoupons(message);
+  if (cmd === '/edit_cc') return handleEditCoupon(message, text);
   return false;
 }
 

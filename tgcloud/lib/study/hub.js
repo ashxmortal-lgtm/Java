@@ -65,11 +65,10 @@ export async function handleStudyHub(message) {
 
 
 /** All-time study stats shown from Study ❄️ mode button */
-export async function buildStudyStatsBlocks(user) {
+export async function buildStudyStatsBlocks(user, fromWelcome = false) {
   const { db } = await import('sdk');
   const { sql } = await import('sdk/db');
   const { getStudyCoins } = await import('../economy.js');
-  const { BIOLOGY_TRACKER } = await import('./tracker_data.js');
   const uid = user.id;
 
   // Aggregate chapter progress
@@ -100,28 +99,38 @@ export async function buildStudyStatsBlocks(user) {
   let studyCoins = 0;
   try { studyCoins = await getStudyCoins(uid); } catch (_) {}
 
-  // Rank by study coins among all users
-  let studyRank = '—';
-  try {
-    const r = await db.get(sql`
-      SELECT COUNT(*) AS n FROM users
-      WHERE COALESCE(study_coins, 0) > ${studyCoins}
-    `);
-    studyRank = `#${(r ? Number(r.n) : 0) + 1}`;
-  } catch (_) {}
+  let studyRank = '';
+  if (studyCoins > 0) {
+    try {
+      const r = await db.get(sql`
+        SELECT COUNT(*) AS n FROM users
+        WHERE COALESCE(study_coins, 0) > ${studyCoins}
+      `);
+      studyRank = `#${(r ? Number(r.n) : 0) + 1}`;
+    } catch (_) {}
+  }
+
+  const revStr = revised > 0 ? String(revised) : '';
+  const pracStr = practiced > 0 ? String(practiced) : '';
+  const pyqStr = pyqs > 0 ? String(pyqs) : '';
+  const todoStr = completedTodos > 0 ? String(completedTodos) : '';
+  const coinStr = studyCoins > 0 ? `${Number(studyCoins).toLocaleString('en-US')} 🍥` : '';
+  const rankStr = studyRank ? ` (${studyRank})` : '';
+  const chapStr = completedChapters > 0 ? String(completedChapters) : '';
+  const sfx = fromWelcome ? ':w' : '';
 
   return [
-    head('📚 𝐒𝐓𝐔𝐃𝐘 𝐒𝐓𝐀𝐓𝐒'),
     para('🥷🏼: ', mention(user)),
     divider,
-    para(`Revised chapters: ${revised}`),
-    para(`Practiced chapters: ${practiced}`),
-    para(`PYQs chapterwise: ${pyqs}`),
-    para(`Completed todos: ${completedTodos}`),
-    para(`Coins earned through study mode: ${Number(studyCoins).toLocaleString('en-US')} 🍥  (${studyRank})`),
-    para(`Completed chapters: ${completedChapters}`),
-    para('(Including revision, practice & pyq all done per chap)'),
+    para(`Revised chapters: ${revStr}`),
+    para(`Practiced chapter: ${pracStr}`),
+    para(`PYQs chapterwise: ${pyqStr}`),
+    para(`completed todo: ${todoStr}`),
+    para(`Coins earned through study mode: ${coinStr}${rankStr}`),
+    para(`Completed chapters : ${chapStr}`),
+    para('(Including revision,practice & pyq all done per chap)'),
     divider,
-    para('Use: /study to open study hub'),
+    para('Use: /study to open study hub.'),
+    row({ text: '← Back', callback_data: `hp:home${sfx}`, style: 'danger' }),
   ];
 }
