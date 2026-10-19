@@ -40,8 +40,7 @@ function line(item) {
 
 const FOOTER =
   `\n\n───────────────\n` +
-  `🛒 /buy [ɪᴛᴇᴍ ɴᴀᴍᴇ]\n\n` +
-  `ᴛᴀᴘ ᴀɴ ɪᴛᴇᴍ ɴᴀᴍᴇ ʙᴇʟᴏᴡ ᴛᴏ ᴄᴏᴘʏ ɪᴛ.`;
+  `🛒 /buy [ɪᴛᴇᴍ ɴᴀᴍᴇ]`;
 
 export const SCREENS = ['main', 'jutsu', 'chakra'];
 
@@ -71,27 +70,17 @@ export function screenText(screen, balance = null) {
   );
 }
 
-function copyRows(names) {
-  const buttons = names.map((name) => ({
-    text: style(name),
-    copy_text: { text: name },
-    style: 'transparent',
-  }));
-  const rows = [];
-  for (let i = 0; i < buttons.length; i += 2) rows.push(buttons.slice(i, i + 2));
-  return rows;
-}
-
 export function screenKeyboard(screen, ownerId, options = {}) {
   const cb = (s) => `store:${s}:${ownerId}`;
   const { includeMiniApp = false, fromMap = false } = options;
   const navStyle = fromMap ? 'transparent' : 'primary';
   if (screen === 'main') {
-    const rows = copyRows(SHINOBI.map((item) => item.name));
-    rows.push([
-      { text: style('Jutsu'), callback_data: cb('jutsu'), style: navStyle },
-      { text: style('Chakra'), callback_data: cb('chakra'), style: navStyle },
-    ]);
+    const rows = [
+      [
+        { text: style('Jutsu'), callback_data: cb('jutsu'), style: navStyle },
+        { text: style('Chakra'), callback_data: cb('chakra'), style: navStyle },
+      ],
+    ];
     if (includeMiniApp) {
       rows.push([{
         text: style('Buy in Mini App'),
@@ -101,10 +90,8 @@ export function screenKeyboard(screen, ownerId, options = {}) {
     }
     return { inline_keyboard: rows };
   }
-  const names = screen === 'jutsu' ? JUTSU.map((item) => item.name) : ['Chakra'];
   return {
     inline_keyboard: [
-      ...copyRows(names),
       [{ text: style('Back'), callback_data: cb('main'), style: navStyle }],
     ],
   };

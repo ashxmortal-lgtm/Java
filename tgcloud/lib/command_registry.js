@@ -41,6 +41,7 @@ export const COMMANDS = [
   { cmd: '/lb', desc: 'Top balances (alias /leaderboard)', access: 'user' },
   { cmd: '/equip', desc: 'Equip a shinobi (max 3)', access: 'user' },
   { cmd: '/unequip', desc: 'Unequip a shinobi', access: 'user' },
+  { cmd: '/redeem', desc: 'Redeem a coupon code', access: 'user' },
   // admin (registered via /imfrozen)
   { cmd: '/imfrozen', desc: 'Register as bot admin of this group', access: 'admin' },
   { cmd: '/eco', desc: 'Lock/unlock economy in this group (/eco on|off)', access: 'admin' },
@@ -53,6 +54,9 @@ export const COMMANDS = [
   { cmd: '/addcoins', desc: 'Add coins to a user', access: 'owner' },
   { cmd: '/backup', desc: 'Database backup', access: 'owner' },
   { cmd: '/backup_all', desc: 'Full source + project snapshot backup', access: 'owner' },
+  { cmd: '/create_cc', desc: 'Create a coupon code', access: 'owner' },
+  { cmd: '/list_cc', desc: 'List active coupon codes', access: 'owner' },
+  { cmd: '/edit_cc', desc: 'Edit a coupon code', access: 'owner' },
 ];
 
 export function listCommands(accessFilter) {

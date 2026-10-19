@@ -562,3 +562,28 @@ export const supportMessageLinks = table('support_message_links', {
   uniqueTopicMessage: uniqueIndex('uidx_support_message_links_topic_message').on(t.threadId, t.supportMessageId),
   userIdx: index('idx_support_message_links_user').on(t.userId),
 }));
+
+/** Coupon codes created by owner; redeemable by any user once. */
+export const coupons = table('coupons', {
+  code: text('code').primaryKey(),
+  // JSON string of rewards, e.g. {"coins":1000,"chakra":50,"shinobis":["Naruto"],"gift":"Rose"}
+  rewards: text('rewards').notNull().default('{}'),
+  // Unix expiry; 0 = never
+  expiresAt: integer('expires_at').notNull().default(0),
+  active: integer('active').notNull().default(1),
+  createdAt: integer('created_at').notNull().default(0),
+  createdBy: integer('created_by').notNull().default(0),
+}, (t) => ({
+  activeIdx: index('idx_coupons_active').on(t.active),
+}));
+
+/** One redemption per user per coupon. */
+export const couponRedemptions = table('coupon_redemptions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  code: text('code').notNull(),
+  telegramId: integer('telegram_id').notNull(),
+  redeemedAt: integer('redeemed_at').notNull().default(0),
+}, (t) => ({
+  uniq: uniqueIndex('uidx_coupon_redemptions').on(t.code, t.telegramId),
+  userIdx: index('idx_coupon_redemptions_user').on(t.telegramId),
+}));

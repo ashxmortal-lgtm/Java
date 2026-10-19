@@ -302,19 +302,40 @@ export async function handleWelcomeCallback(cq) {
     if (screen === 'study') {
       // Show all-time study stats (use /study for the hub)
       await api.answerCallbackQuery({ callback_query_id: cq.id });
-      let stats;
       try {
-        stats = await buildStudyStatsBlocks(cq.from);
+        const stats = await buildStudyStatsBlocks(cq.from);
         await editTo(cq, stats);
       } catch (e) {
         console.error('study stats failed:', e?.description || e);
-        await api.editMessageText({
-          chat_id: cq.message.chat.id,
-          message_id: cq.message.message_id,
-          text: stats
-            ? (plainStudyStats(stats) || 'Study stats are temporarily unavailable. Tap Study mode again to retry.')
-            : 'Study stats are temporarily unavailable. Tap Study mode again to retry.',
-        });
+        // Fallback plain text matching the intended layout
+        try {
+          const { getStudyCoins } = await import('./economy.js');
+          const coins = await getStudyCoins(cq.from.id).catch(() => 0);
+          const text =
+            `📚 𝐒𝐓𝐔𝐃𝐘 𝐒𝐓𝐀𝐓𝐒\n` +
+            `🥷🏼: ${cq.from.first_name || 'Shinobi'}\n` +
+            `─────────────────\n` +
+            `Revised chapters: —\n` +
+            `Practiced chapters: —\n` +
+            `PYQs chapterwise: —\n` +
+            `Completed todos: —\n` +
+            `Coins earned through study mode: ${Number(coins).toLocaleString('en-US')} 🍥\n` +
+            `Completed chapters: —\n` +
+            `(Including revision, practice & pyq all done per chap)\n` +
+            `─────────────────\n` +
+            `Use: /study to open study hub`;
+          await api.editMessageText({
+            chat_id: cq.message.chat.id,
+            message_id: cq.message.message_id,
+            text,
+          });
+        } catch (_) {
+          await api.editMessageText({
+            chat_id: cq.message.chat.id,
+            message_id: cq.message.message_id,
+            text: 'Study stats are temporarily unavailable. Tap Study mode again to retry.',
+          }).catch(() => {});
+        }
       }
       return true;
     }

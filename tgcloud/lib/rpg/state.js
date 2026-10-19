@@ -217,11 +217,18 @@ export async function isEquipped(telegramId, shinobi) {
  * @returns {{ ok: boolean, code: string, list?: string[] }}
  */
 export async function equipShinobi(telegramId, shinobi) {
-  const name = String(shinobi || '').trim();
-  if (!name) return { ok: false, code: 'invalid' };
+  const raw = String(shinobi || '').trim();
+  if (!raw) return { ok: false, code: 'invalid' };
   const own = await ownedSet(telegramId);
-  // Starter is always owned
-  if (name !== 'Starter Shinobi' && !own.has(name)) return { ok: false, code: 'not_owned' };
+  // Resolve name: exact (case-insensitive) or unique partial match among owned + Starter
+  const candidates = ['Starter Shinobi', ...own];
+  const key = raw.toLowerCase();
+  let name = candidates.find((s) => s.toLowerCase() === key);
+  if (!name) {
+    const partial = candidates.filter((s) => s.toLowerCase().includes(key));
+    if (partial.length === 1) name = partial[0];
+  }
+  if (!name) return { ok: false, code: 'not_owned' };
   const list = await getEquippedList(telegramId);
   if (list.some((s) => s.toLowerCase() === name.toLowerCase())) {
     return { ok: false, code: 'already', list };
@@ -264,8 +271,16 @@ export async function equipShinobi(telegramId, shinobi) {
  * @returns {{ ok: boolean, code: string, list?: string[] }}
  */
 export async function unequipShinobi(telegramId, shinobi) {
-  const name = String(shinobi || '').trim();
-  if (!name) return { ok: false, code: 'invalid' };
+  const raw = String(shinobi || '').trim();
+  if (!raw) return { ok: false, code: 'invalid' };
+  const list = await getEquippedList(telegramId);
+  const key = raw.toLowerCase();
+  let name = list.find((s) => s.toLowerCase() === key);
+  if (!name) {
+    const partial = list.filter((s) => s.toLowerCase().includes(key));
+    if (partial.length === 1) name = partial[0];
+  }
+  if (!name) return { ok: false, code: 'not_equipped' };
   try {
     const won = await db.run(sql`
       DELETE FROM user_equipped
