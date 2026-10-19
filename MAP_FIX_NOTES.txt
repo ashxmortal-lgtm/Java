@@ -1,0 +1,27 @@
+MAP UI FIX — 2026-10-13
+=======================
+
+IMAGE IDS (storage channel -1003889508991, bot is admin):
+  MAP home:        465
+  Hokage Office:   466
+  Ichiraku:         49
+  Training Ground:  45
+  Shinobi Stores:   43
+  BBQ / Hot Springs / Gate: reuse main map (465)
+
+Private t.me/c links are NOT HTTP URLs — Bot API uses copyMessage + file_id cache.
+
+FIXES:
+1. constants.js — new message ids above
+2. rich.js — shinobi store as compact table (Shinobi | Price); fromMap opts
+3. store.js — Shinobi Abilities button + fromMap keyboard
+4. ability.js — compact ability text; abilityKeyboardFromMap (Back to Map)
+5. gift.js — catalog as rich table (Gift | Price)
+6. handler.js — gift open (edit same msg → else delete + showCatalog);
+              map_ability (edit to ability + Back to Map);
+              storeContent(..., { fromMap: true }) now matches rich.js
+
+Manual /ability → no Back to Map.
+Map → Shinobi Abilities → has Back to Map.
+
+Gate: DB calls already try/catch wrapped; if still dead check schema tables exist.
