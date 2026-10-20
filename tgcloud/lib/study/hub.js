@@ -4,7 +4,7 @@ import { style } from '../texts.js';
 import { MINI_APP_TRACKER_URL } from '../config.js';
 import { sendBlocks, mention, head, para, divider, row, rp, quoteText } from './common.js';
 
-const BOT_USERNAME = 'exfrozen_bot';
+const BOT_USERNAME = 'missfrozen_bot';
 
 // web_app buttons only work in private chats; in groups the button opens the
 // bot DM with a whitelisted payload and the bot answers with the Mini App button.

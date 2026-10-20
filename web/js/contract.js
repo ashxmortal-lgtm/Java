@@ -52,7 +52,7 @@
     mini_owner: '/owner',
   };
 
-  const BOT_USERNAME = 'exfrozen_bot';
+  const BOT_USERNAME = 'missfrozen_bot';
 
   function unwrapPayload(result) {
     // Official telegram-web-app.js already unwraps { ok, result } before the callback.
