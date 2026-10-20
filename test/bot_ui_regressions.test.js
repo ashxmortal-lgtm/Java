@@ -124,8 +124,8 @@ test('inventory death is shown as user status, equipped shinobi are quoted, and 
 test('Study button stays on the stats view and Study Hub no longer has the external footer', () => {
   const welcome = read('tgcloud', 'lib', 'welcome_ui.js');
   assert.match(welcome, /buildStudyStatsBlocks\(cq\.from\)/);
-  assert.match(welcome, /await editTo\(cq, stats\)/);
-  assert.match(welcome, /Use: \/study to open study hub/);
+  assert.match(welcome, /await editTo\(cq, stats, true\)/);
+  assert.match(welcome, /ᴜꜱᴇ: \/study ᴛᴏ ᴏᴘᴇɴ ꜱᴛᴜᴅʏ ʜᴜʙ/);
   assert.doesNotMatch(welcome, /handleStudyHub/);
   const hub = read('tgcloud', 'lib', 'study', 'hub.js');
   assert.doesNotMatch(hub, /SHEESH/);

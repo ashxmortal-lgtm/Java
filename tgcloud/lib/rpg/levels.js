@@ -34,15 +34,31 @@ export function cloneWindowSec(narutoLevel) {
 }
 
 // Sakura: /claim boost by Sakura level. Max level 4.
-// (Patrol/mission Sakura bonuses beyond the existing +100 🍥 are COMING SOON.)
 export const SAKURA_CLAIM_BONUS = {
   1: { coins: 100, chakra: 50 },
-  2: { coins: 200, chakra: 100 },
-  3: { coins: 300, chakra: 150 },
-  4: { coins: 400, chakra: 200 },
+  2: { coins: 150, chakra: 80 },
+  3: { coins: 300, chakra: 100 },
+  4: { coins: 500, chakra: 120 },
 };
 export function sakuraClaimBonus(sakuraLevel) {
   return SAKURA_CLAIM_BONUS[Math.min(4, Math.max(1, sakuraLevel))] || SAKURA_CLAIM_BONUS[1];
+}
+
+// Sakura: patrol/mission bonus by Sakura level — a random amount inside the
+// range (inclusive). Separate from the /claim boost above.
+export const SAKURA_ACTIVITY_BONUS = {
+  1: { min: 100, max: 200 },
+  2: { min: 200, max: 350 },
+  3: { min: 400, max: 550 },
+  4: { min: 500, max: 700 },
+};
+export function sakuraActivityRange(sakuraLevel) {
+  return SAKURA_ACTIVITY_BONUS[Math.min(4, Math.max(1, sakuraLevel))] || SAKURA_ACTIVITY_BONUS[1];
+}
+/** Random patrol/mission bonus for a Sakura level. `random` is injectable for tests. */
+export function sakuraActivityBonus(sakuraLevel, random = Math.random()) {
+  const { min, max } = sakuraActivityRange(sakuraLevel);
+  return min + Math.floor(random * (max - min + 1));
 }
 
 // Itachi kill bounty — existing ability copy: "/kill → 🍥 50–300".
@@ -68,8 +84,9 @@ export const KATSUYU_PROTECT_SEC = 24 * 3600;
 export const PATROLS_BEFORE_EXHAUSTION = 2;
 export const EXHAUSTION_RECOVERY_SEC = 30 * 60;
 
-// Tsunade search: 6-hour sessions, max 2 starts per IST day.
+// Tsunade search: 6-hour sessions, max 2 starts per IST day, costs chakra.
 export const SEARCH_DURATION_SEC = 6 * 3600;
+export const SEARCH_CHAKRA_COST = 600;
 export const SEARCH_MAX_PER_DAY = 2;
 // A discovery is guaranteed by the 10th completed search.
 export const SEARCH_MAX_ATTEMPTS = 10;
@@ -87,6 +104,9 @@ export function nextTrainSlot(nowSec) {
 
 // Sakura needs two successful sessions per level-up (six total for lv 1→4).
 export const SAKURA_SESSIONS_PER_LEVEL = 2;
+// Naruto (trained by Jiraiya) levels up the same way: two sessions per level.
+// Each level lengthens the Shadow Clone window (5 → 10 → 30 → 60 sec).
+export const NARUTO_SESSIONS_PER_LEVEL = 2;
 export const SAKURA_MAX_LEVEL = 4;
 export const NARUTO_MAX_LEVEL = 4;
 export const ITACHI_MAX_LEVEL = 5;
@@ -99,5 +119,18 @@ export const ITACHI_MAX_LEVEL = 5;
 export function tsunadeFound(n, random = Math.random()) {
   if (n >= SEARCH_MAX_ATTEMPTS) return true;
   const remaining = Math.max(1, SEARCH_MAX_ATTEMPTS - n + 1);
+  return random < n / (n + remaining);
+}
+
+// Jiraiya discovery on Naruto patrols: random with escalating odds, and
+// guaranteed by the 15th completed Naruto patrol.
+export const JIRAIYA_MAX_PATROLS = 15;
+/**
+ * `n` = completed Naruto patrols counted after this one (1-based).
+ * Odds = n / (n + remaining), where remaining shrinks to 1 at patrol 15.
+ */
+export function jiraiyaFound(n, random = Math.random()) {
+  if (n >= JIRAIYA_MAX_PATROLS) return true;
+  const remaining = Math.max(1, JIRAIYA_MAX_PATROLS - n + 1);
   return random < n / (n + remaining);
 }

@@ -7,6 +7,7 @@ import {
   getShinobiState, isDead, isExhausted, recordPatrolCompletion, resetPatrolStreak,
 } from './rpg/state.js';
 import { addPendingReward, pendingRewardTotal } from './map/pending.js';
+import { jiraiyaFound, sakuraActivityBonus } from './rpg/levels.js';
 
 const H = 3600;
 export const KINDS = {
@@ -14,7 +15,7 @@ export const KINDS = {
     word: 'mission',
     eligible: ['Sasuke', 'Naruto'], choose: 'Sasuke or Naruto',
     duration: 3 * H, cooldown: 6 * H, xpMin: 50, xpMax: 150, chakra: 100,
-    min: 300, max: 300, sakura: 100,
+    min: 300, max: 300,
     done: '𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄', doneLine: '𝑨 𝒎𝒊𝒔𝒔𝒊𝒐𝒏 𝒘𝒆𝒍𝒍 𝒅𝒐𝒏𝒆, 𝒔𝒉𝒊𝒏𝒐𝒃𝒊.',
     inel: '𝐌𝐈𝐒𝐒𝐈𝐎𝐍 𝐈𝐍𝐄𝐋𝐈𝐆𝐈𝐁𝐋𝐄',
   },
@@ -23,7 +24,7 @@ export const KINDS = {
     // Sakura may patrol the village but never undertakes missions.
     eligible: ['Naruto', 'Starter Shinobi', 'Hinata', 'Sakura'], choose: 'Naruto, Starter Shinobi, Hinata, or Sakura',
     duration: 1 * H, cooldown: 0, xpMin: 50, xpMax: 150, chakra: 0,   // set to 2 * H for 120 minutes
-    min: 100, max: 400, sakura: 100,
+    min: 100, max: 400,
     done: '𝐏𝐀𝐓𝐑𝐎𝐋 𝐂𝐎𝐌𝐏𝐋𝐄𝐓𝐄', doneLine: '𝑻𝒉𝒆 𝒗𝒊𝒍𝒍𝒂𝒈𝒆 𝒊𝒔 𝒔𝒂𝒇𝒆𝒓 𝒕𝒉𝒂𝒏𝒌𝒔 𝒕𝒐 𝒚𝒐𝒖, 𝒔𝒉𝒊𝒏𝒐𝒃𝒊.',
     inel: '𝐏𝐀𝐓𝐑𝐎𝐋 𝐈𝐍𝐄𝐋𝐈𝐆𝐈𝐁𝐋𝐄',
   },
@@ -44,13 +45,8 @@ export function bold(s) {
 }
 const quote = (s) => `<blockquote>${s}</blockquote>`;
 
-// Jiraiya discovery (formula from your shinobi reference).
-// n = completed Naruto patrols, counted after this patrol.
-function jiraiyaFound(n) {
-  if (n >= 10) return true;
-  const remaining = Math.max(1, 10 - n + 1);
-  return Math.random() < n / (n + remaining);
-}
+// Jiraiya discovery: random, guaranteed within 15 Naruto patrols
+// (jiraiyaFound lives in rpg/levels.js). n = completed Naruto patrols.
 
 const NAMES = ['Sasuke', 'Sakura', 'Naruto', 'Itachi', 'Hinata', 'Jiraiya', 'Starter Shinobi'];
 
@@ -78,12 +74,14 @@ function hours(sec) {
   return `${h} hour${h === 1 ? '' : 's'}`;
 }
 
-// Order: base -> Naruto x3 -> rank multiplier -> flat Sakura bonus.
-function reward(c, shinobi, base, xp, hasSakura) {
+// Order: base -> Naruto x3 -> rank multiplier -> Sakura level bonus.
+// Naruto's x3 applies to patrol/mission only (never /claim).
+// `sakuraBonus` is the already-rolled Sakura patrol/mission bonus (0 = no Sakura).
+function reward(c, shinobi, base, xp, sakuraBonus) {
   let coins = base;
   if (shinobi === 'Naruto') coins *= 3;
   coins = Math.floor((coins * rankOf(xp)[2]) / 100);
-  if (hasSakura) coins += c.sakura;
+  coins += sakuraBonus || 0;
   return coins;
 }
 
@@ -131,7 +129,16 @@ async function finish(a) {
   const xpBefore = u ? u.xp : 0;
   const own = await owned(id);
   const base = a.base_roll > 0 ? a.base_roll : rollBase(c);
-  const coins = reward(c, a.shinobi, base, xpBefore, own.has('Sakura'));
+  let sakuraBonus = 0;
+  if (own.has('Sakura')) {
+    let sakuraLevel = 1;
+    try {
+      const sk = await getShinobiState(id, 'Sakura');
+      sakuraLevel = sk && sk.level ? sk.level : 1;
+    } catch (e) { console.error('[sakura level]', e); }
+    sakuraBonus = sakuraActivityBonus(sakuraLevel);
+  }
+  const coins = reward(c, a.shinobi, base, xpBefore, sakuraBonus);
   // Random 50–150 XP per finished patrol/mission.
   const xpGain = c.xpMin + Math.floor(Math.random() * (c.xpMax - c.xpMin + 1));
   // Coins go to pending (claim at Hokage Office) — only XP is applied immediately.

@@ -72,13 +72,13 @@ export function screenText(screen, balance = null) {
 
 export function screenKeyboard(screen, ownerId, options = {}) {
   const cb = (s) => `store:${s}:${ownerId}`;
-  const { includeMiniApp = false, fromMap = false } = options;
-  const navStyle = fromMap ? 'transparent' : 'primary';
+  const { includeMiniApp = false } = options;
+  // Always rich-colored buttons (primary / success / danger)
   if (screen === 'main') {
     const rows = [
       [
-        { text: style('Jutsu'), callback_data: cb('jutsu'), style: navStyle },
-        { text: style('Chakra'), callback_data: cb('chakra'), style: navStyle },
+        { text: style('Jutsu'), callback_data: cb('jutsu'), style: 'primary' },
+        { text: style('Chakra'), callback_data: cb('chakra'), style: 'primary' },
       ],
     ];
     if (includeMiniApp) {
@@ -92,7 +92,7 @@ export function screenKeyboard(screen, ownerId, options = {}) {
   }
   return {
     inline_keyboard: [
-      [{ text: style('Back'), callback_data: cb('main'), style: navStyle }],
+      [{ text: style('Back'), callback_data: cb('main'), style: 'danger' }],
     ],
   };
 }

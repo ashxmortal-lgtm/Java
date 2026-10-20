@@ -13,6 +13,7 @@ import {
 } from './state.js';
 import {
   nextTrainSlot, SAKURA_SESSIONS_PER_LEVEL, SAKURA_MAX_LEVEL, NARUTO_MAX_LEVEL,
+  NARUTO_SESSIONS_PER_LEVEL, cloneWindowSec, HEAL_COOLDOWN_SEC,
   KATSUYU_UNLOCK_USES, KATSUYU_CHAKRA, KATSUYU_PROTECT_SEC,
 } from './levels.js';
 
@@ -61,21 +62,24 @@ export async function trainSession(telegramId, shinobi, trainer) {
 
   const sessions = st.trainSessions + 1;
   let levelUp = null;
-  if (shinobi === 'Sakura') {
-    // Two successful sessions per level-up; level 4 is the cap.
-    if (st.level < SAKURA_MAX_LEVEL && sessions % SAKURA_SESSIONS_PER_LEVEL === 0) {
-      const lv = st.level + 1;
-      await db.run(sql`
-        UPDATE shinobi_state SET level = ${lv}
-        WHERE telegram_id = ${telegramId} AND shinobi = 'Sakura'
-      `);
-      levelUp = lv;
-    }
+  // Two successful sessions per level-up for both Sakura (Tsunade) and
+  // Naruto (Jiraiya). Each Naruto level lengthens his Shadow Clone window.
+  const perLevel = shinobi === 'Sakura' ? SAKURA_SESSIONS_PER_LEVEL : NARUTO_SESSIONS_PER_LEVEL;
+  const maxLevel = shinobi === 'Sakura' ? SAKURA_MAX_LEVEL : NARUTO_MAX_LEVEL;
+  if (st.level < maxLevel && sessions % perLevel === 0) {
+    const lv = st.level + 1;
+    await db.run(sql`
+      UPDATE shinobi_state SET level = ${lv}
+      WHERE telegram_id = ${telegramId} AND shinobi = ${shinobi}
+    `);
+    levelUp = lv;
   }
-  // Naruto: sessions are tracked; his level-up requirements are COMING SOON.
+  const level = levelUp || st.level;
   return {
-    code: 'ok', shinobi, trainer, sessions, nextTrainAt: next, levelUp,
-    maxLevel: shinobi === 'Sakura' ? SAKURA_MAX_LEVEL : NARUTO_MAX_LEVEL,
+    code: 'ok', shinobi, trainer, sessions, nextTrainAt: next, levelUp, level,
+    maxLevel,
+    sessionsToNext: level >= maxLevel ? 0 : perLevel - (sessions % perLevel || 0),
+    cloneWindowSec: shinobi === 'Naruto' ? cloneWindowSec(level) : null,
   };
 }
 
@@ -85,39 +89,79 @@ export function sakuraHealUnlocked(sakuraLevel) {
   return sakuraLevel >= SAKURA_MAX_LEVEL;
 }
 
+/** What Sakura's Healing would restore right now (dead / exhausted / mission cooldowns). */
+async function healTargets(telegramId, t = now()) {
+  const stMap = await getAllShinobiState(telegramId);
+  const dead = Object.entries(stMap).filter(([, st]) => isDead(st, t)).map(([n]) => n);
+  const exhausted = Object.entries(stMap).filter(([, st]) => isExhausted(st, t)).map(([n]) => n);
+  const cd = await db.all(sql`
+    SELECT shinobi FROM activities
+    WHERE telegram_id = ${telegramId} AND cooldown_until > ${t} AND status != 'active'
+  `);
+  return { dead, exhausted, cooldowns: (cd || []).map((r) => r.shinobi) };
+}
+
 export async function sakuraHealStatus(telegramId) {
   const st = await getShinobiState(telegramId, 'Sakura');
   const skills = await getUserSkills(telegramId);
   const t = now();
+  const targets = await healTargets(telegramId, t);
   return {
     owned: (await owned(telegramId)).has('Sakura'),
     level: st ? st.level : 1,
-    dead: isDead(st, t),
+    dead: targets.dead.length > 0,
+    deadList: targets.dead,
+    exhaustedList: targets.exhausted,
+    cooldownList: targets.cooldowns,
+    needed: targets.dead.length + targets.exhausted.length + targets.cooldowns.length > 0,
     unlocked: sakuraHealUnlocked(st ? st.level : 1),
-    cooldownUntil: skills.sakuraHealAt ? skills.sakuraHealAt + 24 * 3600 : 0,
+    cooldownUntil: skills.sakuraHealAt ? skills.sakuraHealAt + HEAL_COOLDOWN_SEC : 0,
     uses: skills.sakuraHealUses || 0,
     now: t,
   };
 }
 
-/** Revive dead Sakura. 24h cooldown, self-only, persists use count. */
+/**
+ * Sakura's Healing (unlocked at Sakura Lv. 4). Once per 24h, self-only:
+ *  - revives every dead shinobi (e.g. killed by Itachi),
+ *  - instantly clears exhaustion on all shinobi,
+ *  - resets mission cooldowns (patrols have none; the patrol streak resets too).
+ * The 24h cooldown is only spent when something was actually restored.
+ */
 export async function sakuraHeal(telegramId) {
   const s = await sakuraHealStatus(telegramId);
   if (!s.owned) return { code: 'not_owned' };
   if (!s.unlocked) return { code: 'locked', level: s.level };
   if (s.cooldownUntil > s.now) return { code: 'cooldown', until: s.cooldownUntil };
-  if (!s.dead) return { code: 'not_dead' };
+  if (!s.needed) return { code: 'nothing' };
 
-  const st = await getShinobiState(telegramId, 'Sakura');
-  if (!isDead(st, now())) return { code: 'not_dead' }; // re-check after await
-  const used = await once(`sakura_heal:${telegramId}:${st.deadUntil}`);
-  if (!used) return { code: 'duplicate' };
+  // Guarded cooldown claim: only the first concurrent press wins.
+  const t = now();
+  const won = await db.run(sql`
+    UPDATE user_skills
+    SET sakura_heal_at = ${t}, sakura_heal_uses = sakura_heal_uses + 1
+    WHERE telegram_id = ${telegramId} AND sakura_heal_at <= ${t - HEAL_COOLDOWN_SEC}
+  `);
+  if (won.rowsAffected === 0) return { code: 'duplicate' };
 
-  await revive(telegramId, 'Sakura');
-  const uses = (await getUserSkills(telegramId)).sakuraHealUses + 1;
-  await setUserSkills(telegramId, { sakuraHealAt: now(), sakuraHealUses: uses });
+  const revived = [];
+  for (const name of s.deadList) {
+    await revive(telegramId, name);
+    revived.push(name);
+  }
+  await db.run(sql`
+    UPDATE shinobi_state SET exhausted_until = 0, patrol_streak = 0
+    WHERE telegram_id = ${telegramId} AND exhausted_until > ${t}
+  `);
+  await db.run(sql`
+    UPDATE activities SET cooldown_until = 0
+    WHERE telegram_id = ${telegramId} AND cooldown_until > ${t} AND status != 'active'
+  `);
+
+  const uses = (await getUserSkills(telegramId)).sakuraHealUses;
   return {
-    code: 'ok', nextAt: now() + 24 * 3600, uses,
+    code: 'ok', nextAt: t + HEAL_COOLDOWN_SEC, uses,
+    revived, exhaustedCleared: s.exhaustedList, cooldownsCleared: s.cooldownList,
     katsuyuUnlocked: uses >= KATSUYU_UNLOCK_USES,
   };
 }
@@ -237,7 +281,11 @@ export async function restorableTimers(telegramId) {
 export function sakuraHealInfoText(s) {
   if (!s.owned) return '🌸 Sakura is not on your roster.';
   if (!s.unlocked) return `🌸 Sakura's Healing unlocks at Lv. ${SAKURA_MAX_LEVEL} via Tsunade training (now Lv. ${s.level}).`;
-  if (s.dead) return '🌸 Sakura is ☠️ dead — healing is available.';
   if (s.cooldownUntil > s.now) return `🌸 Sakura's Healing ready at ${dueText(s.cooldownUntil, s.now)}.`;
-  return `🌸 Sakura's Healing ready (${s.uses} uses).`;
+  if (!s.needed) return `🌸 Sakura's Healing ready (${s.uses} uses) — nobody needs healing right now.`;
+  const bits = [];
+  if (s.deadList.length) bits.push(`☠️ revive: ${s.deadList.join(', ')}`);
+  if (s.exhaustedList.length) bits.push(`🔥 exhausted: ${s.exhaustedList.join(', ')}`);
+  if (s.cooldownList.length) bits.push(`⏳ mission cooldown: ${s.cooldownList.join(', ')}`);
+  return `🌸 Sakura's Healing ready (${s.uses} uses).\n${bits.join('\n')}`;
 }

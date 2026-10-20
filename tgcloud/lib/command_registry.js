@@ -36,6 +36,7 @@ export const COMMANDS = [
   { cmd: '/todo', desc: 'Study todos', access: 'user' },
   { cmd: '/duel', desc: 'Study duel', access: 'user' },
   { cmd: '/report', desc: 'Study report', access: 'user' },
+  { cmd: '/reminder', desc: 'Set a timed reminder', access: 'user' },
   { cmd: '/transfer', desc: 'Transfer coins to a user (reply in group)', access: 'user' },
   { cmd: '/leaderboard', desc: 'Top balances (alias /lb)', access: 'user' },
   { cmd: '/lb', desc: 'Top balances (alias /leaderboard)', access: 'user' },
@@ -75,5 +76,6 @@ export function listCommands(accessFilter) {
 }
 
 export function formatCommandList(cmds) {
+  // Commands stay plain text so Telegram makes them tappable; descriptions may be styled by style().
   return cmds.map((c) => `${c.cmd} — ${c.desc}`).join('\n');
 }
