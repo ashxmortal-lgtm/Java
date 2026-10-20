@@ -8,7 +8,7 @@ import { escapeHtml } from './texts.js';
 const CONFIRMATION = 'ʏᴏᴜʀ ᴍᴇꜱꜱᴀɢᴇ ʜᴀꜱ ʙᴇᴇɴ ꜰᴏʀᴡᴀʀᴅᴇᴅ ᴛᴏ <a href="https://t.me/frozenblooded">𝑭𝒓❄️𝒛𝒆𝒏 𝑩𝒍𝒐𝒐𝒅𝒆𝒅</a>. ᴘʟᴇᴀꜱᴇ ᴡᴀɪᴛ ꜰᴏʀ ᴀ ʀᴇᴘʟʏ.';
 const isAuthorized = (userId) => ADMIN_IDS.includes(Number(userId));
 const nowSec = () => Math.floor(Date.now() / 1000);
-const BOT_USERNAME = 'exfrozen_bot';
+const BOT_USERNAME = 'missfrozen_bot';
 const SHARED_GROUP_TOPIC_KEY = 'support.shared_group_topic_thread_id';
 const UNBAN_COOLDOWN = 24 * 60 * 60;
 const UNBAN_PROMPT_TTL = 10 * 60;

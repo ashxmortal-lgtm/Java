@@ -33,9 +33,9 @@ const mention = (u) => ({
 async function botUsername() {
   try {
     const me = await api.getMe();
-    return me.username || 'exfrozen_bot';
+    return me.username || 'missfrozen_bot';
   } catch (_) {
-    return 'exfrozen_bot';
+    return 'missfrozen_bot';
   }
 }
 

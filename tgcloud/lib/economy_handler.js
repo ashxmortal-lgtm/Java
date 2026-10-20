@@ -36,7 +36,7 @@ import { handleSearchTsuna } from '../lib/rpg/tsunade.js';
 import { send, sweepMessages, trackUser } from './chat.js';
 import { groupChatLink } from './telegram_links.js';
 
-const BOT_USERNAME = 'exfrozen_bot';
+const BOT_USERNAME = 'missfrozen_bot';
 
 function reply(message, body, extra = {}) {
   return send(message.chat.id, {

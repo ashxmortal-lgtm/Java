@@ -172,6 +172,6 @@ export function groupOnlyContent(cmd) {
     P('「𝐆𝐑𝐎𝐔𝐏 𝐂𝐎𝐌𝐌𝐀𝐍𝐃」'),
     P(`/${cmd} works in groups only.`),
     P('» use it in a group where i am a member.'),
-    row(btn('Add to grp', { url: 'tg://resolve?domain=exfrozen_bot&startgroup=true', style: 'danger' })),
+    row(btn('Add to grp', { url: 'tg://resolve?domain=missfrozen_bot&startgroup=true', style: 'danger' })),
   ];
 }

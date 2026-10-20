@@ -24,7 +24,7 @@ test('Shinobi Store lists items and launches direct purchases in the Mini App', 
   }
   assert.equal(buttons.filter((button) => button.copy_text).length, 0, 'the bot store must not copy purchase commands');
   const launch = buttons.find((button) => button.web_app?.url);
-  assert.equal(launch?.web_app?.url, 'https://app8868570312.tgcloud.ai/?page=store');
+  assert.equal(launch?.web_app?.url, 'https://app8888370613.tgcloud.ai/?page=store');
 
   assert.match(screenText('jutsu'), /Mind Transmission Jutsu/);
   assert.match(screenText('chakra'), /Chakra/);
