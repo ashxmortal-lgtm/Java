@@ -16,7 +16,7 @@ import { render, style, escapeHtml, mention } from '../texts.js';
 import { send } from '../chat.js';
 import { getMapPhotoFileId } from '../map/media.js';
 import { todayKey } from '../economy.js';
-import { dueText } from './time.js';
+import { dueText, istDateTime } from './time.js';
 import {
   ensureShinobiState,
 } from './state.js';
@@ -29,6 +29,21 @@ const TSUNADE_MEDIA_CHAT_ID = -1003889508991;
 const TSUNADE_MEDIA_MESSAGE_ID = 31;
 
 const now = () => Math.floor(Date.now() / 1000);
+
+function remainingLabel(seconds) {
+  const total = Math.max(0, Math.floor(seconds));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (hours > 0) {
+    return `${hours} hour${hours === 1 ? '' : 's'}${minutes ? ` ${minutes} minute${minutes === 1 ? '' : 's'}` : ''}`;
+  }
+  if (minutes > 0) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
+  return `${total} second${total === 1 ? '' : 's'}`;
+}
+
+function searchProgress(user, endsAt, currentTime, heading) {
+  return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 ${heading}\nɴᴀʀᴜᴛᴏ ᴀɴᴅ ᴊɪʀᴀɪʏᴀ ʟᴇꜰᴛ konoha village to ꜱᴇᴀʀᴄʜ ꜰᴏʀ ʟᴀᴅʏ ᴛꜱᴜɴᴀᴅᴇ.\n\n🎯 ᴇxᴘᴇᴄᴛᴇᴅ ꜰɪɴɪꜱʜ: ${dueText(endsAt, currentTime)}\n\n⏳ ᴛɪᴍᴇ ʀᴇᴍᴀɪɴɪɴɢ: ${remainingLabel(endsAt - currentTime)}\nCheck in again at ${istDateTime(endsAt)}.`;
+}
 
 async function ownedSet(telegramId) {
   const rows = await db.all(sql`
@@ -74,7 +89,7 @@ export async function handleSearchTsuna(message) {
 
   // Active session → status report (works in DM and groups).
   if (row && row.status === 'active') {
-    return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒\n\nNaruto and Jiraiya are searching for Lady Tsunade.\n\n⏳ completes at ${dueText(row.endsAt, t)}\n(search #${row.totalSearches})\n\n❄️ Check back at ${dueText(row.endsAt, t)} — invoke /search_tsuna again after it finishes.`;
+    return `${searchProgress(user, row.endsAt, t, '𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒')}\n\nSearch #${row.totalSearches}.`;
   }
 
   // Starting a new search is group-only
@@ -114,7 +129,7 @@ export async function handleSearchTsuna(message) {
     return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒\n\n⏳ completes at ${dueText(row.endsAt, t)}`;
   }
 
-  return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐁𝐄𝐆𝐔𝐍\n\nNaruto and Jiraiya left to search for Lady Tsunade.\n\n📅 started: ${dueText(startsAt, t)}\n🎯 expected finish: ${dueText(endsAt, t)}\n⏳ time remaining: 6 hours\n\n❄️ Invoke /search_tsuna again after the search ends — no automatic report is sent.`;
+  return searchProgress(user, endsAt, t, '𝐁𝐄𝐆𝐔𝐍');
 }
 
 /**

@@ -49,6 +49,7 @@
     mini_duel: '/duel',
     mini_map: '/map',
     mini_tracker: '/tracker',
+    mini_owner: '/owner',
   };
 
   const BOT_USERNAME = 'exfrozen_bot';

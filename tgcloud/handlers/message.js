@@ -22,6 +22,8 @@ import {
 } from '../lib/games/handler.js';
 import { handleMapCommand, mapSweep } from '../lib/map/handler.js';
 import { handleSupportCommand, handleSupportMessage, handleSupportAdminReply } from '../lib/support_inbox.js';
+import { handleCouponWizardText } from '../lib/coupons.js';
+import { sweepClones } from '../lib/rpg/combat.js';
 
 const MINI_APP_START_COMMANDS = {
   mini_todo: '/todo',
@@ -30,16 +32,25 @@ const MINI_APP_START_COMMANDS = {
   mini_duel: '/duel',
   mini_map: '/map',
   mini_tracker: '/tracker',
+  mini_owner: '/owner',
 };
 
 export default async function (message, ctx) {
+  // Serverless has no setTimeout; resolve any due Shadow Clone attacks against
+  // their persisted expiry when the next Telegram update arrives.
+  try { await sweepClones(); } catch (e) { console.error('[clone sweep]', e); }
+
   // Fixed, whitelisted deep-link payloads let the Mini App launch these commands
   // directly in the bot DM without accepting arbitrary command text from a URL.
   if (message.chat?.type === 'private') {
-    const start = String(message.text || '').trim().match(/^\/start(?:@\w+)?\s+(mini_todo|mini_studytime|mini_study|mini_duel|mini_map|mini_tracker)$/i);
+    const start = String(message.text || '').trim().match(/^\/start(?:@\w+)?\s+(mini_todo|mini_studytime|mini_study|mini_duel|mini_map|mini_tracker|mini_owner)$/i);
     const key = start && start[1].toLowerCase();
     const command = key && MINI_APP_START_COMMANDS[key];
     if (command) {
+      if (key === 'mini_owner') {
+        await handleSupportCommand({ ...message, text: '/owner' });
+        return;
+      }
       if (key === 'mini_tracker') {
         await sendTrackerLauncher(message.chat.id);
         return;
@@ -54,6 +65,7 @@ export default async function (message, ctx) {
   }
 
   if (await handleSupportCommand(message)) return;
+  if (await handleCouponWizardText(message)) return;
   if (await handleSupportAdminReply(message)) return;
   const supportMessageHandled = await handleSupportMessage(message);
   if (supportMessageHandled && message.chat?.type === 'private') return;

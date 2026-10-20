@@ -282,7 +282,11 @@ async function editStoreScreen(msg, user, screen) {
   const markup = screenKeyboard(screen, user.id, {
     includeMiniApp: msg.chat.type === 'private' && screen === 'main',
   });
-  return classicEdit(msg, render(user, screenText(screen, balance)), markup);
+  const content = await storeContent(screen, user.id, {
+    includeMiniApp: msg.chat.type === 'private' && screen === 'main',
+  });
+  return editRichOr(msg, user, content, () =>
+    classicEdit(msg, render(user, screenText(screen, balance)), markup));
 }
 
 export async function handleEconomyCallback(cb) {

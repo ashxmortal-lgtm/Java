@@ -69,6 +69,43 @@ test('Coupons module and owner commands exist and are wired', () => {
   assert.match(ownerCode, /\/edit_cc/);
 });
 
+test('Coupon wizard supports multiple reward types, custom or never expiry, editing and text input routing', () => {
+  const couponCode = read('tgcloud', 'lib', 'coupons.js');
+  for (const reward of ['shinobi', 'coins', 'chakra', 'gifts']) assert.match(couponCode, new RegExp(reward));
+  for (const phase of ['reward_values', 'expiry_days', 'rename', 'edit_ready']) assert.match(couponCode, new RegExp(phase));
+  assert.match(couponCode, /cc:expiry:never/);
+  assert.match(couponCode, /cc:expiry:custom/);
+  assert.match(couponCode, /cc:edit:save_rewards/);
+  assert.match(couponCode, /cc:edit:save_expiry/);
+  assert.match(couponCode, /export async function handleCouponWizardText/);
+
+  const messages = read('tgcloud', 'handlers', 'message.js');
+  assert.match(messages, /if \(await handleCouponWizardText\(message\)\) return/);
+  const callbacks = read('tgcloud', 'lib', 'owner_cmds.js');
+  assert.match(callbacks, /data\.startsWith\('cc:'\).*handleCouponWizardCallback/);
+});
+
+test('Legacy inline keyboards are rendered as Rich Message rows and /help command tokens use plain code font', () => {
+  const adapter = read('tgcloud', 'lib', 'message_api.js');
+  assert.match(adapter, /function richRows\(keyboard\)/);
+  assert.match(adapter, /<tg-button-row align="center">/);
+  assert.match(adapter, /tg-button type="\$\{type\}"/);
+  assert.match(adapter, /methodName !== 'sendMessage' && methodName !== 'editMessageText'/);
+  assert.match(adapter, /sendRichMessage/);
+
+  const help = read('tgcloud', 'lib', 'welcome_ui.js');
+  assert.match(help, /const command = \(text\) => \(\{ type: 'code', text \}\)/);
+  assert.match(help, /commandLine\('\/search_tsuna'/);
+});
+
+test('Mini App feedback launches the /owner support menu through a whitelisted payload', () => {
+  const app = read('web', 'js', 'app.js');
+  assert.match(app, /\?start=mini_owner/);
+  const messages = read('tgcloud', 'handlers', 'message.js');
+  assert.match(messages, /mini_owner: '\/owner'/);
+  assert.match(messages, /handleSupportCommand\(\{ \.\.\.message, text: '\/owner' \}\)/);
+});
+
 test('Games hub includes /rps_cancel and XOXO/RPS winner announcements format', () => {
   const lobbyCode = read('tgcloud', 'lib', 'games', 'lobby.js');
   assert.match(lobbyCode, /export async function abortRpsMatch/);
