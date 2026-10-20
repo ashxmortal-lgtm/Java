@@ -197,7 +197,7 @@
       + '<p class="fb-title">💬 Have feedback? We’re listening!</p>'
       + '<p class="fb-body">🐛 Report bugs, 💡 suggest new features, or ⭐ share your review to help us improve.</p>'
       + '<p class="fb-body">👇 Tap “Send Feedback” to share your thoughts with us!</p>'
-      + '<a class="fb-btn primary" href="https://t.me/' + esc(C.BOT_USERNAME) + '?start=mini_owner" data-url="https://t.me/' + esc(C.BOT_USERNAME) + '?start=mini_owner">Send ❄️ Feedback</a>'
+      + '<a class="fb-btn primary" href="https://t.me/' + esc(C.BOT_USERNAME) + '?start=owner">Send ❄️ Feedback</a>'
       + '<p class="fb-body" style="margin-top:12px">📢 Join our official updates channel for the latest news, announcements, and new features.</p>'
       + '<a class="fb-btn channel" href="https://t.me/frozenblooded" target="_blank" rel="noopener">Join 𝑭𝒓❄️𝒛𝒆𝒏 𝑩𝒍𝒐𝒐𝒅𝒆𝒅 channel</a>'
       + '</section>';

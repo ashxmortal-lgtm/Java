@@ -2,7 +2,7 @@ import { BotApiError } from 'sdk';
 import { api } from '../message_api.js';
 import { style } from '../texts.js';
 import { MINI_APP_TRACKER_URL } from '../config.js';
-import { sendBlocks, mention, head, para, divider, row, rp } from './common.js';
+import { sendBlocks, mention, head, para, divider, row, rp, quoteText } from './common.js';
 
 const BOT_USERNAME = 'exfrozen_bot';
 
@@ -40,6 +40,7 @@ export async function handleStudyHub(message) {
     para('⚔️ /duel @username — ᴄʜᴀʟʟᴇɴɢᴇ ᴛᴏ ᴀ ꜱᴛᴜᴅʏ ᴅᴜᴇʟ'),
     para('🧬 /tracker — ᴛʀᴀᴄᴋ ʙɪᴏʟᴏɢʏ ᴘʀᴏɢʀᴇꜱꜱ'),
     para('📝 /report — ꜱᴇɴᴅ ᴀ ꜱᴛᴜᴅʏ ʀᴇᴘᴏʀᴛ ᴀɴʏᴛɪᴍᴇ'),
+    para('⏰ /reminder — ꜱᴇᴛ ᴀ ᴛɪᴍᴇᴅ ʀᴇᴍɪɴᴅᴇʀ'),
     para('🔗 /hnc — ᴏᴘᴇɴꜱ ʜɪᴅᴅᴇɴ ɴᴇᴇᴛ ᴄᴏᴍᴍᴜɴɪᴛʏ ʟɪɴᴋꜱ ᴀɴᴅ ꜱᴛᴜᴅʏ ᴍᴀᴛᴇʀɪᴀʟ'),
     para('📚 /study — ᴛᴏ ᴏᴘᴇɴ ᴛʜɪꜱ ᴍᴇɴᴜ ᴀɴʏᴡʜᴇʀᴇ'),
     divider,
@@ -110,27 +111,28 @@ export async function buildStudyStatsBlocks(user, fromWelcome = false) {
     } catch (_) {}
   }
 
-  const revStr = revised > 0 ? String(revised) : '';
-  const pracStr = practiced > 0 ? String(practiced) : '';
-  const pyqStr = pyqs > 0 ? String(pyqs) : '';
-  const todoStr = completedTodos > 0 ? String(completedTodos) : '';
-  const coinStr = studyCoins > 0 ? `${Number(studyCoins).toLocaleString('en-US')} 🍥` : '';
-  const rankStr = studyRank ? ` (${studyRank})` : '';
-  const chapStr = completedChapters > 0 ? String(completedChapters) : '';
+  const orNone = (v) => (v ? String(v) : 'None');
+  const revStr = orNone(revised > 0 ? revised : '');
+  const pracStr = orNone(practiced > 0 ? practiced : '');
+  const pyqStr = orNone(pyqs > 0 ? pyqs : '');
+  const todoStr = orNone(completedTodos > 0 ? completedTodos : '');
+  const coinStr = studyCoins > 0
+    ? `${Number(studyCoins).toLocaleString('en-US')} 🍥${studyRank ? ` (${studyRank})` : ''}`
+    : 'None';
+  const chapStr = orNone(completedChapters > 0 ? completedChapters : '');
   const sfx = fromWelcome ? ':w' : '';
 
   return [
     para('🥷🏼: ', mention(user)),
-    divider,
-    para(`Revised chapters: ${revStr}`),
-    para(`Practiced chapter: ${pracStr}`),
-    para(`PYQs chapterwise: ${pyqStr}`),
-    para(`completed todo: ${todoStr}`),
-    para(`Coins earned through study mode: ${coinStr}${rankStr}`),
-    para(`Completed chapters : ${chapStr}`),
-    para('(Including revision,practice & pyq all done per chap)'),
-    divider,
-    para('Use: /study to open study hub.'),
+    quoteText([
+      `✦ ʀᴇᴠɪꜱᴇᴅ ᴄʜᴀᴘᴛᴇʀꜱ: ${revStr}`,
+      `✦ ᴘʀᴀᴄᴛɪᴄᴇᴅ ᴄʜᴀᴘᴛᴇʀꜱ: ${pracStr}`,
+      `✦ ᴘʏǫꜱ ᴄʜᴀᴘᴛᴇʀᴡɪꜱᴇ: ${pyqStr}`,
+      `✦ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ᴛᴏ-ᴅᴏ: ${todoStr}`,
+      `✦ ᴄᴏɪɴꜱ ᴇᴀʀɴᴇᴅ ᴛʜʀᴏᴜɢʜ ꜱᴛᴜᴅʏ ᴍᴏᴅᴇ: ${coinStr}`,
+      `✦ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ᴄʜᴀᴘᴛᴇʀꜱ: ${chapStr} (ɪɴᴄʟᴜᴅɪɴɢ ʀᴇᴠɪꜱɪᴏɴ, ᴘʀᴀᴄᴛɪᴄᴇ & ᴘʏǫꜱ ᴀʟʟ ᴅᴏɴᴇ ᴘᴇʀ ᴄʜᴀᴘᴛᴇʀ)`,
+    ].join('\n')),
+    para('ᴜꜱᴇ: /study ᴛᴏ ᴏᴘᴇɴ ꜱᴛᴜᴅʏ ʜᴜʙ.'),
     row({ text: '← Back', callback_data: `hp:home${sfx}`, style: 'danger' }),
   ];
 }

@@ -16,6 +16,8 @@ const row = (...buttons) => ({ type: 'buttons', buttons, align: 'center' });
 const cb = (text, data, style) => (style ? { text, callback_data: data, style } : { text, callback_data: data });
 const urlBtn = (text, url, style) => (style ? { text, url, style } : { text, url });
 const rich = (blocks) => ({ blocks });
+/** Plain-text command (no code formatting) so Telegram makes it tappable. */
+const cmdLine = (cmd, desc) => para(`${cmd}  —  ${desc}`);
 const mention = (u) => ({
   type: 'text_mention',
   text: (u && u.first_name) || 'User',
@@ -162,8 +164,6 @@ export async function buildWelcomeBlocks(user) {
 
 const backBtn = (data) => row(cb('← Back', data, 'danger'));
 const sfx = (fromWelcome) => (fromWelcome ? ':w' : '');
-const command = (text) => ({ type: 'code', text });
-const commandLine = (name, description) => para([command(name), ' — ', description]);
 
 export async function buildUserHelpBlocks(_user, fromWelcome = false) {
   return [
@@ -179,21 +179,21 @@ export async function buildUserHelpBlocks(_user, fromWelcome = false) {
 function gameBlocks(w) {
   return [
     head('Game ❄️ mode', 6),
-    commandLine('/daily', 'Claim daily 500 shinobi coins 🍥'),
-    commandLine('/map', 'Open Konoha village map'),
-    commandLine('/shinobi_store', 'Buy shinobi and jutsu'),
-    commandLine('/gift_store', 'Open the Naruto-themed gift store'),
-    commandLine('/mission', 'Start a mission'),
-    commandLine('/patrol', 'Start a patrol'),
-    commandLine('/kill', 'Attack a target'),
-    commandLine('/rob', 'Rob a target'),
-    commandLine('/protect', 'Activate protection'),
-    commandLine('/byakugan', 'Check protection status'),
-    commandLine('/search_tsuna', 'Search for Tsunade'),
-    commandLine('/mt', 'Send Mind Transmission to a target'),
-    commandLine('/transfer', 'Transfer coins (reply in a group)'),
-    para([command('/equip'), ' · ', command('/unequip'), ' — Equip shinobi (max 3)']),
-    para([command('/leaderboard'), ' (', command('/lb'), ') — Top balances']),
+    cmdLine('/daily', 'claim daily 500 shinobi coins 🍥'),
+    cmdLine('/map', 'Open konoha village map'),
+    cmdLine('/shinobi_store', 'buy shinobis and jutsu'),
+    cmdLine('/gift_store', 'naruto themed gifts'),
+    cmdLine('/mission', 'Start a mission'),
+    cmdLine('/patrol', 'Start a patrol'),
+    cmdLine('/kill', 'kill a target'),
+    cmdLine('/rob', 'Rob a target'),
+    cmdLine('/protect', 'Activate protection'),
+    cmdLine('/byakugan', 'Check protection status'),
+    cmdLine('/search_tsuna', 'Search for Tsunade'),
+    cmdLine('/mt', 'send Mind Transmission to target'),
+    cmdLine('/transfer', 'transfer coins (reply in group)'),
+    cmdLine('/equip · /unequip', 'equip shinobi (max 3)'),
+    cmdLine('/leaderboard (/lb)', 'top balances'),
     row(cb('Extras', `hp:extras${sfx(w)}`, 'primary'), cb('more ❄️ games', `hp:more${sfx(w)}`, 'primary')),
     backBtn(`hp:home${sfx(w)}`),
   ];
@@ -202,11 +202,11 @@ function gameBlocks(w) {
 function extrasBlocks(w) {
   return [
     head('Extras', 6),
-    commandLine('/gift', 'Send a gift'),
-    commandLine('/hug', 'Hug a user'),
-    commandLine('/slap', 'Slap a user'),
-    commandLine('/punch', 'Punch a user'),
-    commandLine('/pat', 'Pat a user'),
+    cmdLine('/gift', 'Send a gift'),
+    cmdLine('/hug', 'Hug a user'),
+    cmdLine('/slap', 'Slap a user'),
+    cmdLine('/punch', 'Punch a user'),
+    cmdLine('/pat', 'Pat a user'),
     backBtn(`hp:game${sfx(w)}`),
   ];
 }
@@ -214,14 +214,14 @@ function extrasBlocks(w) {
 function moreGamesBlocks(w) {
   return [
     head('more ❄️ games', 6),
-    commandLine('/games', 'Open the non-Naruto games menu'),
-    commandLine('/xoxo', 'Play XOXO'),
-    commandLine('/xoxo_cancel', 'Cancel XOXO'),
-    commandLine('/cancel_xoxo', 'Alternate XOXO cancel command'),
-    commandLine('/xoxo_stats', 'View XOXO stats'),
-    commandLine('/rps', 'Play Rock Paper Scissors'),
-    commandLine('/rps_stats', 'View RPS stats'),
-    commandLine('/rps_cancel', 'Cancel the RPS lobby'),
+    cmdLine('/games', 'Open games menu (non naruto themed)'),
+    cmdLine('/xoxo', 'Play XOXO'),
+    cmdLine('/xoxo_cancel', 'Cancel XOXO'),
+    cmdLine('/cancel_xoxo', 'Alternate XOXO cancel command'),
+    cmdLine('/xoxo_stats', 'View XOXO stats'),
+    cmdLine('/rps', 'Play Rock Paper Scissors'),
+    cmdLine('/rps_stats', 'View RPS stats'),
+    cmdLine('/rps_cancel', 'Cancel RPS lobby'),
     backBtn(`hp:game${sfx(w)}`),
   ];
 }
@@ -256,12 +256,14 @@ export async function sendWelcome(chatId, user) {
   }
 }
 
-async function editTo(cq, blocks) {
+async function editTo(cq, blocks, detectEntities = false) {
   try {
     await api.editMessageText({
       chat_id: cq.message.chat.id,
       message_id: cq.message.message_id,
-      rich_message: { blocks: Array.isArray(blocks) ? blocks : blocks?.blocks || [], skip_entity_detection: true },
+      rich_message: detectEntities
+        ? { blocks: Array.isArray(blocks) ? blocks : blocks?.blocks || [] }
+        : { blocks: Array.isArray(blocks) ? blocks : blocks?.blocks || [], skip_entity_detection: true },
     });
   } catch (e) {
     if (Array.isArray(blocks)) {
@@ -321,22 +323,19 @@ export async function handleWelcomeCallback(cq) {
       await api.answerCallbackQuery({ callback_query_id: cq.id });
       try {
         const stats = await buildStudyStatsBlocks(cq.from);
-        await editTo(cq, stats);
+        await editTo(cq, stats, true);
       } catch (e) {
         console.error('study stats failed:', e?.description || e);
         try {
           const text =
-            `🥷🏼: ${cq.from.first_name || 'Shinobi'}\n` +
-            `#\n` +
-            `Revised chapters: \n` +
-            `Practiced chapter: \n` +
-            `PYQs chapterwise: \n` +
-            `completed todo: \n` +
-            `Coins earned through study mode: \n` +
-            `Completed chapters : \n` +
-            `(Including revision,practice & pyq all done per chap)\n` +
-            `#\n\n` +
-            `Use: /study to open study hub.`;
+            `🥷🏼: ${cq.from.first_name || 'Shinobi'}\n\n` +
+            `✦ ʀᴇᴠɪꜱᴇᴅ ᴄʜᴀᴘᴛᴇʀꜱ: None\n` +
+            `✦ ᴘʀᴀᴄᴛɪᴄᴇᴅ ᴄʜᴀᴘᴛᴇʀꜱ: None\n` +
+            `✦ ᴘʏǫꜱ ᴄʜᴀᴘᴛᴇʀᴡɪꜱᴇ: None\n` +
+            `✦ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ᴛᴏ-ᴅᴏ: None\n` +
+            `✦ ᴄᴏɪɴꜱ ᴇᴀʀɴᴇᴅ ᴛʜʀᴏᴜɢʜ ꜱᴛᴜᴅʏ ᴍᴏᴅᴇ: None\n` +
+            `✦ ᴄᴏᴍᴘʟᴇᴛᴇᴅ ᴄʜᴀᴘᴛᴇʀꜱ: None (ɪɴᴄʟᴜᴅɪɴɢ ʀᴇᴠɪꜱɪᴏɴ, ᴘʀᴀᴄᴛɪᴄᴇ & ᴘʏǫꜱ ᴀʟʟ ᴅᴏɴᴇ ᴘᴇʀ ᴄʜᴀᴘᴛᴇʀ)\n\n` +
+            `ᴜꜱᴇ: /study ᴛᴏ ᴏᴘᴇɴ ꜱᴛᴜᴅʏ ʜᴜʙ.`;
           await api.editMessageText({
             chat_id: cq.message.chat.id,
             message_id: cq.message.message_id,
@@ -354,7 +353,7 @@ export async function handleWelcomeCallback(cq) {
       : screen === 'extras' ? extrasBlocks(w)
         : screen === 'more' ? moreGamesBlocks(w)
           : await buildUserHelpBlocks(cq.from, w);
-    await editTo(cq, blocks);
+    await editTo(cq, blocks, screen === 'game' || screen === 'extras' || screen === 'more');
   } catch (e) {
     console.error('welcome callback failed:', e?.description || e);
     try { await api.answerCallbackQuery({ callback_query_id: cq.id }); } catch (_) {}

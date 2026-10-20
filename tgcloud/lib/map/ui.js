@@ -11,6 +11,16 @@ export function guard(prefix, userId) {
   return `${prefix}:${userId}`;
 }
 
+/** /map entry — choose which village to visit. */
+export function villageKeyboard(userId) {
+  return {
+    inline_keyboard: [
+      [btn('🍃 Hidden Leaf Village', guard('map_village_leaf', userId))],
+      [btn('🏜️ Hidden Sand Village', guard('map_village_sand', userId))],
+    ],
+  };
+}
+
 /** Home map — 4 rows as specified. */
 export function mapKeyboard(userId) {
   return {

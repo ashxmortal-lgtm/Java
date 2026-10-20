@@ -94,15 +94,15 @@ test('Legacy inline keyboards are rendered as Rich Message rows and /help comman
   assert.match(adapter, /sendRichMessage/);
 
   const help = read('tgcloud', 'lib', 'welcome_ui.js');
-  assert.match(help, /const command = \(text\) => \(\{ type: 'code', text \}\)/);
-  assert.match(help, /commandLine\('\/search_tsuna'/);
+  assert.match(help, /const cmdLine = \(cmd, desc\) => para\(`\$\{cmd\}  —  \$\{desc\}`\)/);
+  assert.match(help, /cmdLine\('\/search_tsuna'/);
 });
 
 test('Mini App feedback launches the /owner support menu through a whitelisted payload', () => {
   const app = read('web', 'js', 'app.js');
-  assert.match(app, /\?start=mini_owner/);
+  assert.match(app, /\?start=owner/);
   const messages = read('tgcloud', 'handlers', 'message.js');
-  assert.match(messages, /mini_owner: '\/owner'/);
+  assert.match(messages, /owner: '\/owner'/);
   assert.match(messages, /handleSupportCommand\(\{ \.\.\.message, text: '\/owner' \}\)/);
 });
 

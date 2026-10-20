@@ -10,9 +10,10 @@ import { sql } from 'sdk/db';
 import { style, escapeHtml } from '../texts.js';
 import { screenText, screenKeyboard, fmt } from '../store.js';
 import { runActivity, settleOwn, KINDS } from '../activities.js';
-import { MAP_ENABLED, MAX_CHAKRA } from './constants.js';
+import { MAP_ENABLED, MAX_CHAKRA, MAP_IMAGE_FALLBACK_MESSAGE_ID } from './constants.js';
 import {
   mapKeyboard,
+  villageKeyboard,
   hokageKeyboard,
   gateKeyboard,
   ichirakuKeyboard,
@@ -126,6 +127,10 @@ const LOC_COPY = {
   },
 };
 
+function villageBody() {
+  return p('Choose which village you want to visit.');
+}
+
 function homeBody() {
   return locBody('🗺️ KONOHA MAP', ['Choose a location.']);
 }
@@ -163,7 +168,10 @@ async function showScreen(chatId, panelMessageId, user, bodyInner, keyboard, loc
   const body = mapBody(user, bodyInner);
   const storageId = storageIdForLocation(locKey);
   const caption = style('<b>🗺️ KONOHA MAP</b>');
-  const photoFileId = await getMapPhotoFileId(chatId, storageId);
+  let photoFileId = await getMapPhotoFileId(chatId, storageId);
+  if (!photoFileId && storageId !== MAP_IMAGE_FALLBACK_MESSAGE_ID) {
+    photoFileId = await getMapPhotoFileId(chatId, MAP_IMAGE_FALLBACK_MESSAGE_ID);
+  }
   const mediaOptions = { mediaFileId: photoFileId, mediaCaption: caption };
   const legacyPhotoId = user?._mapHasRichPanel
     ? Number(user?._mapPhotoMessageId) || null
@@ -213,17 +221,31 @@ function trainResultBody(r) {
     `Next session: ${dueText(r.nextTrainAt)}`,
   ];
   if (r.levelUp) lines.push(`🏅 Level up! ${escapeHtml(r.shinobi)} is now Lv. ${r.levelUp}.`);
-  if (r.shinobi === 'Naruto') lines.push("Naruto's level-up requirements: COMING SOON.");
+  if (r.shinobi === 'Naruto') {
+    lines.push(`🌀 Shadow Clone window: ${r.cloneWindowSec} sec (Lv. ${r.level}/${r.maxLevel}).`);
+    if (r.sessionsToNext > 0) lines.push(`Next level in ${r.sessionsToNext} more session(s) — the clone window grows each level.`);
+    else lines.push('Max level reached.');
+  } else if (r.shinobi === 'Sakura') {
+    if (r.sessionsToNext > 0) lines.push(`Next level in ${r.sessionsToNext} more session(s). (Lv. ${r.level}/${r.maxLevel})`);
+    else lines.push('Max level reached — Sakura\'s Healing is unlocked.');
+  }
   return locBody('🏋️ TRAINING COMPLETE', lines);
+}
+
+function sakuraHealSummary(r) {
+  const parts = [];
+  if (r.revived && r.revived.length) parts.push(`Revived: ${r.revived.join(', ')}`);
+  if (r.exhaustedCleared && r.exhaustedCleared.length) parts.push(`Exhaustion cleared: ${r.exhaustedCleared.join(', ')}`);
+  if (r.cooldownsCleared && r.cooldownsCleared.length) parts.push(`Mission cooldown reset: ${r.cooldownsCleared.join(', ')}`);
+  return `🌸 Sakura's Healing used.\n${parts.join('\n')}`;
 }
 
 async function sakuraHealBody(telegramId) {
   const s = await sakuraHealStatus(telegramId);
   const info = sakuraHealInfoText(s);
   const lines = [info];
-  if (s.unlocked && s.dead && s.cooldownUntil <= s.now) {
-    lines.push('Tap below to revive Sakura. She can patrol again right away.');
-    lines.push('(Missions remain closed to Sakura — village rules.)');
+  if (s.unlocked) {
+    lines.push('Once per 24h: revives your dead shinobi, clears exhaustion and resets mission cooldowns.');
   }
   if (s.uses >= 3) lines.push("🐌 Katsuyu's Healing is unlocked.");
   else if (s.unlocked) lines.push(`🐌 Katsuyu's Healing unlocks after ${3 - s.uses} more healing use(s).`);
@@ -538,7 +560,11 @@ export async function handleMapCommand(message) {
   } catch (e) {
     console.error('[map bbq sweep]', e);
   }
-  await showScreen(message.chat.id, null, user, homeBody(), mapKeyboard(user.id), 'home');
+  await sendMapRich(
+    message.chat.id,
+    mapBody(user, villageBody()),
+    villageKeyboard(user.id),
+  );
 }
 
 export async function mapSweep(userId) {
@@ -588,6 +614,17 @@ export async function handleMapCallback(cb) {
   const messageId = msg.message_id;
 
   try {
+    if (action === 'map_village_sand') {
+      await answer(cb, 'Coming soon', true);
+      return true;
+    }
+
+    if (action === 'map_village_leaf') {
+      await answer(cb);
+      await showScreen(chatId, messageId, user, homeBody(), mapKeyboard(user.id), 'home');
+      return true;
+    }
+
     if (action === 'map_home') {
       await answer(cb);
       await showScreen(chatId, messageId, user, homeBody(), mapKeyboard(user.id), 'home');
@@ -1383,8 +1420,8 @@ export async function handleMapCallback(cb) {
         await answer(cb, `Already used — ready at ${dueText(r.until)}.`, true);
         return true;
       }
-      if (r.code === 'not_dead') {
-        await answer(cb, 'Sakura is not dead — healing is not needed.', true);
+      if (r.code === 'nothing') {
+        await answer(cb, 'Nothing to heal — no dead or exhausted shinobi and no mission cooldown.', true);
         return true;
       }
       if (r.code === 'not_owned') {
@@ -1395,7 +1432,7 @@ export async function handleMapCallback(cb) {
         await answer(cb);
         return true;
       }
-      await answer(cb, 'Sakura has been healed! 🌸', true);
+      await answer(cb, sakuraHealSummary(r), true);
       await showScreen(chatId, messageId, user, sakuraHealBody(user.id), trainingKeyboard(user.id), 'training');
       return true;
     }

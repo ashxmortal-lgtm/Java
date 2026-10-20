@@ -82,7 +82,7 @@ const footer = () => [
 // Short skill notes — only skills already defined in the game.
 const SKILL_NOTES = {
   Sasuke: 'mission specialist',
-  Sakura: 'boost on /claim · patrol only · healing at Lv. 4',
+  Sakura: 'boost on /claim, patrol, mission · patrol only · healing at Lv. 4',
   Naruto: '×3 patrol/mission rewards · shadow clone',
   Itachi: 'kill & rob · cannot patrol/mission',
   Hinata: '/byakugan — reveals protection time',
@@ -93,9 +93,9 @@ const SKILL_NOTES = {
  * Async — callers must await it.
  */
 export async function storeContent(screen, ownerId, options = {}) {
-  const cb = (s) => ({
+  const cb = (s, styleName = 'primary') => ({
     callback_data: `store:${s}:${ownerId}`,
-    style: options.fromMap ? 'transparent' : 'primary',
+    style: styleName,
   });
   if (screen === 'jutsu') {
     const rows = [['Item', 'Price']];
@@ -109,7 +109,7 @@ export async function storeContent(screen, ownerId, options = {}) {
       P('🌀 𝐉𝐔𝐓𝐒𝐔'),
       table(rows),
       ...footer(),
-      row(btn('Back', cb('main'))),
+      row(btn('Back', cb('main', 'danger'))),
     ];
   }
   if (screen === 'chakra') {
@@ -121,7 +121,7 @@ export async function storeContent(screen, ownerId, options = {}) {
       P('⚡ 𝐂𝐇𝐀𝐊𝐑𝐀'),
       table(rows),
       ...footer(),
-      row(btn('Back', cb('main'))),
+      row(btn('Back', cb('main', 'danger'))),
     ];
   }
 

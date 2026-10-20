@@ -6,11 +6,19 @@
 export const MAP_ENABLED = true;
 
 export const MAP_IMAGE_CHAT_ID = -1003889508991;
-export const MAP_IMAGE_MESSAGE_ID = 38;
+/** Hidden Leaf Village map (main map). 38 is kept only as a fallback image. */
+export const MAP_IMAGE_MESSAGE_ID = 465;
+export const MAP_IMAGE_FALLBACK_MESSAGE_ID = 38;
+
+/** Villages shown by /map. Only the Leaf village is playable for now. */
+export const VILLAGES = {
+  leaf: { key: 'leaf', name: 'Hidden Leaf Village', storageMessageId: 465, link: 'https://t.me/c/3889508991/465', available: true },
+  sand: { key: 'sand', name: 'Hidden Sand Village', storageMessageId: 483, link: 'https://t.me/c/3889508991/483', available: false },
+};
 
 /** Storage message ids. null → reuse main map image (38). */
 export const LOCATION_IMAGES = {
-  home: 38,
+  home: 465,
   hokage: 42,
   ichiraku: 49,
   training: 45,
@@ -22,7 +30,7 @@ export const LOCATION_IMAGES = {
 
 /** Human-readable links (docs / logs only — not HTTP image URLs). */
 export const LOCATION_LINKS = {
-  home: 'https://t.me/c/3889508991/38',
+  home: 'https://t.me/c/3889508991/465',
   hokage: 'https://t.me/c/3889508991/42',
   ichiraku: 'https://t.me/c/3889508991/49',
   gate: 'https://t.me/c/3889508991/46',

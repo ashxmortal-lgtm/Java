@@ -26,6 +26,28 @@ import {
 const now = () => Math.floor(Date.now() / 1000);
 const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
 
+/** Delay helper — setTimeout is missing in some cloud runtimes. */
+let _sleepFn = null;
+async function getSleep() {
+  if (_sleepFn) return _sleepFn;
+  try {
+    const { setTimeout: st } = await import('node:timers/promises');
+    if (typeof st === 'function') {
+      _sleepFn = (ms) => st(ms);
+      return _sleepFn;
+    }
+  } catch (_) {}
+  try {
+    if (typeof globalThis !== 'undefined' && typeof globalThis.setTimeout === 'function') {
+      _sleepFn = (ms) => new Promise((r) => globalThis.setTimeout(r, ms));
+      return _sleepFn;
+    }
+  } catch (_) {}
+  // Last resort: no delay (countdown edits skipped; expires_at still resolves via sweep)
+  _sleepFn = async () => {};
+  return _sleepFn;
+}
+
 function topicOf(message) {
   return message && message.message_thread_id
     ? { message_thread_id: message.message_thread_id }
@@ -383,8 +405,29 @@ export async function handleKill(message) {
       WHERE id = ${pendingId} AND status = 'arming'
     `);
 
-    // Serverless handlers cannot sleep or keep a live countdown running.
-    // The expiry is persisted above; sweepClones resolves it on the next bot update.
+    // Live countdown 5 -> 4 -> 3 -> 2 -> 1 -> 0
+    // Prefer node:timers/promises (setTimeout may be missing in some runtimes).
+    const sleep = await getSleep();
+    for (let s = windowSec - 1; s >= 0; s--) {
+      await sleep(1000);
+      const cur = await db.get(sql`SELECT status FROM clone_pending WHERE id = ${pendingId}`);
+      if (!cur || cur.status !== 'pending') break;
+      if (s > 0) {
+        const blocks = cloneBlocks({ id: pendingId, chatId: message.chat.id }, target, user.first_name || 'Shinobi', s);
+        try {
+          await api.editMessageText({
+            chat_id: message.chat.id,
+            message_id: messageId,
+            rich_message: { blocks, skip_entity_detection: true },
+          });
+        } catch (_) {}
+      } else {
+        const rRow = await db.get(sql`SELECT * FROM clone_pending WHERE id = ${pendingId}`);
+        if (rRow && rRow.status === 'pending') {
+          await resolveCloneTimeout(rRow);
+        }
+      }
+    }
     return true;
   }
 

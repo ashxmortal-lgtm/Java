@@ -1,7 +1,8 @@
 /**
  * Hidden Tsunade discovery — /search_tsuna.
- * Requires Naruto + Jiraiya on the roster. Each session lasts 6 hours;
- * up to 2 sessions may START per IST day. There is no scheduler and no
+ * Requires Naruto + Jiraiya on the roster. Each session lasts 6 hours and
+ * costs 600 chakra (charged when the search starts); up to 2 sessions may
+ * START per IST day. There is no scheduler and no
  * automatic completion report: the user invokes /search_tsuna again to
  * resolve a finished session. Timestamps are persisted (restart-safe).
  *
@@ -16,12 +17,12 @@ import { render, style, escapeHtml, mention } from '../texts.js';
 import { send } from '../chat.js';
 import { getMapPhotoFileId } from '../map/media.js';
 import { todayKey } from '../economy.js';
-import { dueText, istDateTime } from './time.js';
+import { dueText, istDateTime, inRemaining } from './time.js';
 import {
   ensureShinobiState,
 } from './state.js';
 import {
-  SEARCH_DURATION_SEC, SEARCH_MAX_PER_DAY, EXHAUSTION_RECOVERY_SEC, tsunadeFound,
+  SEARCH_DURATION_SEC, SEARCH_MAX_PER_DAY, SEARCH_CHAKRA_COST, EXHAUSTION_RECOVERY_SEC, tsunadeFound,
 } from './levels.js';
 
 /** Storage-channel media supplied for the discovery message. */
@@ -30,27 +31,19 @@ const TSUNADE_MEDIA_MESSAGE_ID = 31;
 
 const now = () => Math.floor(Date.now() / 1000);
 
-function remainingLabel(seconds) {
-  const total = Math.max(0, Math.floor(seconds));
-  const hours = Math.floor(total / 3600);
-  const minutes = Math.floor((total % 3600) / 60);
-  if (hours > 0) {
-    return `${hours} hour${hours === 1 ? '' : 's'}${minutes ? ` ${minutes} minute${minutes === 1 ? '' : 's'}` : ''}`;
-  }
-  if (minutes > 0) return `${minutes} minute${minutes === 1 ? '' : 's'}`;
-  return `${total} second${total === 1 ? '' : 's'}`;
-}
-
-function searchProgress(user, endsAt, currentTime, heading) {
-  return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 ${heading}\nɴᴀʀᴜᴛᴏ ᴀɴᴅ ᴊɪʀᴀɪʏᴀ ʟᴇꜰᴛ konoha village to ꜱᴇᴀʀᴄʜ ꜰᴏʀ ʟᴀᴅʏ ᴛꜱᴜɴᴀᴅᴇ.\n\n🎯 ᴇxᴘᴇᴄᴛᴇᴅ ꜰɪɴɪꜱʜ: ${dueText(endsAt, currentTime)}\n\n⏳ ᴛɪᴍᴇ ʀᴇᴍᴀɪɴɪɴɢ: ${remainingLabel(endsAt - currentTime)}\nCheck in again at ${istDateTime(endsAt)}.`;
-}
-
 async function ownedSet(telegramId) {
   const rows = await db.all(sql`
     SELECT item_name FROM inventory
     WHERE telegram_id = ${telegramId} AND item_type = 'shinobi'
   `);
   return new Set((rows || []).map((r) => r.item_name));
+}
+
+async function chakraQty(telegramId) {
+  const r = await db.get(sql`
+    SELECT qty FROM inventory WHERE telegram_id = ${telegramId} AND item_name = 'Chakra'
+  `);
+  return r ? r.qty : 0;
 }
 
 export async function searchRow(telegramId) {
@@ -89,7 +82,7 @@ export async function handleSearchTsuna(message) {
 
   // Active session → status report (works in DM and groups).
   if (row && row.status === 'active') {
-    return `${searchProgress(user, row.endsAt, t, '𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒')}\n\nSearch #${row.totalSearches}.`;
+    return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒\n\nNaruto and Jiraiya are searching for Lady Tsunade.\n\n⏳ completes at ${dueText(row.endsAt, t)}\n(search #${row.totalSearches})\n\n❄️ Check back at ${dueText(row.endsAt, t)} — invoke /search_tsuna again after it finishes.`;
   }
 
   // Starting a new search is group-only
@@ -113,6 +106,12 @@ export async function handleSearchTsuna(message) {
     return `${mention(user)}\n\n⏳ 𝐃𝐀𝐈𝐋𝐘 𝐋𝐈𝐌𝐈𝐓\n\nThe search may be started twice per day.\n\n» Come back tomorrow (next start available after 12:00 AM IST).`;
   }
 
+  // Chakra cost — checked first so the player gets a clear message.
+  const haveChakra = await chakraQty(id);
+  if (haveChakra < SEARCH_CHAKRA_COST) {
+    return `${mention(user)}\n\n「𝐂𝐇𝐀𝐊𝐑𝐀 𝐃𝐄𝐏𝐋𝐄𝐓𝐄𝐃」\n\nRequired: chakra x ${SEARCH_CHAKRA_COST} ⚡\nAvailable: chakra x ${haveChakra} ⚡\n\n» Use /claim or /buy chakra 100.`;
+  }
+
   const startsAt = t;
   const endsAt = t + SEARCH_DURATION_SEC;
   // Guarded claim on the single row per user.
@@ -129,7 +128,37 @@ export async function handleSearchTsuna(message) {
     return `${mention(user)}\n\n🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐈𝐍 𝐏𝐑𝐎𝐆𝐑𝐄𝐒𝐒\n\n⏳ completes at ${dueText(row.endsAt, t)}`;
   }
 
-  return searchProgress(user, endsAt, t, '𝐁𝐄𝐆𝐔𝐍');
+  // Charge chakra after the session is claimed (so a duplicate request can
+  // never pay twice). If the guarded charge fails, roll the session back.
+  const paid = await db.run(sql`
+    UPDATE inventory SET qty = qty - ${SEARCH_CHAKRA_COST}
+    WHERE telegram_id = ${id} AND item_name = 'Chakra' AND qty >= ${SEARCH_CHAKRA_COST}
+  `);
+  if (paid.rowsAffected === 0) {
+    await db.run(sql`
+      UPDATE tsunade_search
+      SET status = 'done', day_count = MAX(0, COALESCE(day_count, 0) - 1),
+          total_searches = MAX(0, COALESCE(total_searches, 0) - 1)
+      WHERE telegram_id = ${id} AND status = 'active' AND started_at = ${startsAt}
+    `);
+    return `${mention(user)}\n\n「𝐂𝐇𝐀𝐊𝐑𝐀 𝐃𝐄𝐏𝐋𝐄𝐓𝐄𝐃」\n\nRequired: chakra x ${SEARCH_CHAKRA_COST} ⚡\nAvailable: chakra x ${await chakraQty(id)} ⚡\n\n» Use /claim or /buy chakra 100.`;
+  }
+
+  // Message format (styled by caller via style()):
+  // 🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐁𝐄𝐆𝐔𝐍
+  // ɴᴀʀᴜᴛᴏ ᴀɴᴅ ᴊɪʀᴀɪʏᴀ ʟᴇꜰᴛ konoha village to ꜱᴇᴀʀᴄʜ ꜰᴏʀ ʟᴀᴅʏ ᴛꜱᴜɴᴀᴅᴇ.
+  // 🎯 ᴇxᴘᴇᴄᴛᴇᴅ ꜰɪɴɪꜱʜ: 20 ᴏᴄᴛ, 01:45 ɪꜱᴛ (ɪɴ 6ʜ 00ᴍ)
+  // ⏳ ᴛɪᴍᴇ ʀᴇᴍᴀɪɴɪɴɢ: 6 ʜᴏᴜʀꜱ
+  // Check in again at {exact time}.
+  const finishStamp = istDateTime(endsAt);
+  return (
+    `${mention(user)}\n\n` +
+    `🔎 𝐒𝐄𝐀𝐑𝐂𝐇 𝐁𝐄𝐆𝐔𝐍\n` +
+    `Naruto and Jiraiya left konoha village to search for Lady Tsunade.\n\n` +
+    `🎯 expected finish: ${finishStamp} (${inRemaining(endsAt, t)})\n` +
+    `⏳ time remaining: 6 hours\n` +
+    `Check in again at ${finishStamp}.`
+  );
 }
 
 /**

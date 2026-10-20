@@ -64,10 +64,10 @@ test('Naruto clone window grows with level (5/10/30/60s)', () => {
 
 test('Sakura claim bonus per level', () => {
   assert.deepEqual(sakuraClaimBonus(1), { coins: 100, chakra: 50 });
-  assert.deepEqual(sakuraClaimBonus(2), { coins: 200, chakra: 100 });
-  assert.deepEqual(sakuraClaimBonus(3), { coins: 300, chakra: 150 });
-  assert.deepEqual(sakuraClaimBonus(4), { coins: 400, chakra: 200 });
-  assert.deepEqual(sakuraClaimBonus(9), { coins: 400, chakra: 200 }, 'level 4 is the cap');
+  assert.deepEqual(sakuraClaimBonus(2), { coins: 150, chakra: 80 });
+  assert.deepEqual(sakuraClaimBonus(3), { coins: 300, chakra: 100 });
+  assert.deepEqual(sakuraClaimBonus(4), { coins: 500, chakra: 120 });
+  assert.deepEqual(sakuraClaimBonus(9), { coins: 500, chakra: 120 }, 'level 4 is the cap');
 });
 
 test('Tsunade discovery: guaranteed by the 10th search, random before', () => {

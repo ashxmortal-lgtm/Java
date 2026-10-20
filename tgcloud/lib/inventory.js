@@ -190,13 +190,16 @@ export async function sendInventory(chatId, user) {
 
 function sakuraAlert(r) {
   if (r.code === 'ok') {
-    return r.katsuyuUnlocked
-      ? "Sakura revived. Katsuyu's Healing is unlocked."
-      : 'Sakura revived.';
+    const parts = [];
+    if (r.revived && r.revived.length) parts.push(`Revived: ${r.revived.join(', ')}.`);
+    if (r.exhaustedCleared && r.exhaustedCleared.length) parts.push(`Exhaustion cleared: ${r.exhaustedCleared.join(', ')}.`);
+    if (r.cooldownsCleared && r.cooldownsCleared.length) parts.push(`Mission cooldown reset: ${r.cooldownsCleared.join(', ')}.`);
+    if (r.katsuyuUnlocked) parts.push("Katsuyu's Healing is unlocked.");
+    return `Sakura's Healing used. ${parts.join(' ')}`.trim();
   }
   if (r.code === 'locked') return `Sakura's Healing unlocks at Lv. 4 (now Lv. ${r.level}).`;
   if (r.code === 'cooldown') return `On cooldown until ${dueText(r.until)}.`;
-  if (r.code === 'not_dead') return 'Sakura is not dead.';
+  if (r.code === 'nothing') return 'Nothing to heal — no dead or exhausted shinobi and no mission cooldown.';
   if (r.code === 'not_owned') return 'Sakura is not on your roster.';
   return 'Could not use Sakura\'s Healing.';
 }

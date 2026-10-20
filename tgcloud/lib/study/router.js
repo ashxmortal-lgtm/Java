@@ -4,9 +4,10 @@ import { handleStudytime, handleStudyText, handleStudyCb } from './studytime.js'
 import { handleTodo, handleTodoInput, handleTodoCb } from './todo.js';
 import { handleDuel, handleDuelText, handleDuelCb } from './duel.js';
 import { handleReport, handleReportCb } from './report.js';
+import { handleReminder, handleReminderInput, handleReminderCb, processReminders } from './reminder.js';
 import { processDue } from './due.js';
 
-const due = async () => { try { await processDue(); } catch (e) { console.error('study due error', e && (e.description || e.message)); } };
+const due = async () => { try { await processDue(); await processReminders(); } catch (e) { console.error('study due error', e && (e.description || e.message)); } };
 
 export async function handleStudyCommand(message) {
   if (!message.from || message.from.is_bot) return false;
@@ -18,9 +19,11 @@ export async function handleStudyCommand(message) {
   if (cmd === '/studytime') { await handleStudytime(message); return true; }
   if (cmd === '/todo') { await handleTodo(message); return true; }
   if (cmd === '/duel') { await handleDuel(message); return true; }
+  if (cmd === '/reminder') { await handleReminder(message); return true; }
   if (cmd === '/report') { await handleReport(message); return true; }
   if (text.startsWith('/')) return false;
   if (await handleDuelText(message)) return true;
+  if (await handleReminderInput(message)) return true;
   if (await handleTodoInput(message)) return true;
   if (await handleStudyText(message)) return true;
   return false;
@@ -28,7 +31,7 @@ export async function handleStudyCommand(message) {
 
 export async function handleStudyCallback(cq) {
   const d = cq.data || '';
-  if (!/^(tracker_|study_|todo_|duel_|report_)/.test(d)) return false;
+  if (!/^(tracker_|study_|todo_|duel_|report_|rem_)/.test(d)) return false;
   await due();
-  return (await handleTrackerCallback(cq)) || (await handleStudyCb(cq)) || (await handleTodoCb(cq)) || (await handleDuelCb(cq)) || (await handleReportCb(cq));
+  return (await handleTrackerCallback(cq)) || (await handleStudyCb(cq)) || (await handleTodoCb(cq)) || (await handleDuelCb(cq)) || (await handleReportCb(cq)) || (await handleReminderCb(cq));
 }
