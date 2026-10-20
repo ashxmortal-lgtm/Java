@@ -5,6 +5,7 @@
     "@tgcloud/cli": "^0.2.0"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-tgcloud-cli.js",
     "deploy": "tgcloud push",
     "status": "tgcloud status",
     "run": "tgcloud run",
