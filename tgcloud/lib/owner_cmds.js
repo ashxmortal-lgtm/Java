@@ -1,4 +1,4 @@
-import { handleCreateCoupon, handleListCoupons, handleEditCoupon } from "./coupons.js";
+import { handleCreateCoupon, handleListCoupons, handleEditCoupon, handleCouponWizardCallback } from "./coupons.js";
 import { db, BotApiError } from 'sdk';
 import { api } from './message_api.js';
 import { eq } from 'sdk/db';
@@ -250,6 +250,7 @@ export async function handleOwnerCommand(message) {
 
 export async function handleOwnerCallback(cq) {
   const data = cq.data || '';
+  if (data.startsWith('cc:')) return handleCouponWizardCallback(cq);
   if (data === 'stats:refresh') {
     if (cq.from.id !== OWNER_ID) {
       await api.answerCallbackQuery({ callback_query_id: cq.id, text: 'Owner only.', show_alert: true });

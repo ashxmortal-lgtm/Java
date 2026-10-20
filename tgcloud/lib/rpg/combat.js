@@ -383,27 +383,8 @@ export async function handleKill(message) {
       WHERE id = ${pendingId} AND status = 'arming'
     `);
 
-    // Live countdown 5 -> 4 -> 3 -> 2 -> 1 -> 0
-    for (let s = windowSec - 1; s >= 0; s--) {
-      await new Promise((r) => setTimeout(r, 1000));
-      const cur = await db.get(sql`SELECT status FROM clone_pending WHERE id = ${pendingId}`);
-      if (!cur || cur.status !== 'pending') break;
-      if (s > 0) {
-        const blocks = cloneBlocks({ id: pendingId, chatId: message.chat.id }, target, user.first_name || 'Shinobi', s);
-        try {
-          await api.editMessageText({
-            chat_id: message.chat.id,
-            message_id: messageId,
-            rich_message: { blocks, skip_entity_detection: true },
-          });
-        } catch (_) {}
-      } else {
-        const rRow = await db.get(sql`SELECT * FROM clone_pending WHERE id = ${pendingId}`);
-        if (rRow && rRow.status === 'pending') {
-          await resolveCloneTimeout(rRow);
-        }
-      }
-    }
+    // Serverless handlers cannot sleep or keep a live countdown running.
+    // The expiry is persisted above; sweepClones resolves it on the next bot update.
     return true;
   }
 

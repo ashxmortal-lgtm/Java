@@ -162,6 +162,8 @@ export async function buildWelcomeBlocks(user) {
 
 const backBtn = (data) => row(cb('← Back', data, 'danger'));
 const sfx = (fromWelcome) => (fromWelcome ? ':w' : '');
+const command = (text) => ({ type: 'code', text });
+const commandLine = (name, description) => para([command(name), ' — ', description]);
 
 export async function buildUserHelpBlocks(_user, fromWelcome = false) {
   return [
@@ -177,21 +179,21 @@ export async function buildUserHelpBlocks(_user, fromWelcome = false) {
 function gameBlocks(w) {
   return [
     head('Game ❄️ mode', 6),
-    para('/daily- claim daily 500 shinobi coins 🍥'),
-    para('/map — Open konoha village map'),
-    para('/shinobi_store : buy shinobis and jutsu'),
-    para('/gift_store : naruto themed gifts'),
-    para('/mission — Start a mission'),
-    para('/patrol — Start a patrol'),
-    para('/kill — kill a target'),
-    para('/rob — Rob a target'),
-    para('/protect — Activate protection'),
-    para('/byakugan — Check protection status'),
-    para('/search_tsuna — Search for Tsunade'),
-    para('/mt — send Mind Transmission to target'),
-    para('/transfer — transfer coins (reply in group)'),
-    para('/equip · /unequip — equip shinobi (max 3)'),
-    para('/leaderboard (/lb) — top balances'),
+    commandLine('/daily', 'Claim daily 500 shinobi coins 🍥'),
+    commandLine('/map', 'Open Konoha village map'),
+    commandLine('/shinobi_store', 'Buy shinobi and jutsu'),
+    commandLine('/gift_store', 'Open the Naruto-themed gift store'),
+    commandLine('/mission', 'Start a mission'),
+    commandLine('/patrol', 'Start a patrol'),
+    commandLine('/kill', 'Attack a target'),
+    commandLine('/rob', 'Rob a target'),
+    commandLine('/protect', 'Activate protection'),
+    commandLine('/byakugan', 'Check protection status'),
+    commandLine('/search_tsuna', 'Search for Tsunade'),
+    commandLine('/mt', 'Send Mind Transmission to a target'),
+    commandLine('/transfer', 'Transfer coins (reply in a group)'),
+    para([command('/equip'), ' · ', command('/unequip'), ' — Equip shinobi (max 3)']),
+    para([command('/leaderboard'), ' (', command('/lb'), ') — Top balances']),
     row(cb('Extras', `hp:extras${sfx(w)}`, 'primary'), cb('more ❄️ games', `hp:more${sfx(w)}`, 'primary')),
     backBtn(`hp:home${sfx(w)}`),
   ];
@@ -200,11 +202,11 @@ function gameBlocks(w) {
 function extrasBlocks(w) {
   return [
     head('Extras', 6),
-    para('/gift — Send a gift'),
-    para('/hug — Hug a user'),
-    para('/slap — Slap a user'),
-    para('/punch — Punch a user'),
-    para('/pat — Pat a user'),
+    commandLine('/gift', 'Send a gift'),
+    commandLine('/hug', 'Hug a user'),
+    commandLine('/slap', 'Slap a user'),
+    commandLine('/punch', 'Punch a user'),
+    commandLine('/pat', 'Pat a user'),
     backBtn(`hp:game${sfx(w)}`),
   ];
 }
@@ -212,14 +214,14 @@ function extrasBlocks(w) {
 function moreGamesBlocks(w) {
   return [
     head('more ❄️ games', 6),
-    para('/games — Open games menu (non naruto themed)'),
-    para('/xoxo — Play XOXO'),
-    para('/xoxo_cancel — Cancel XOXO'),
-    para('/cancel_xoxo — Alternate XOXO cancel command'),
-    para('/xoxo_stats — View XOXO stats'),
-    para('/rps — Play Rock Paper Scissors'),
-    para('/rps_stats — View RPS stats'),
-    para('/rps_cancel — Cancel RPS lobby'),
+    commandLine('/games', 'Open the non-Naruto games menu'),
+    commandLine('/xoxo', 'Play XOXO'),
+    commandLine('/xoxo_cancel', 'Cancel XOXO'),
+    commandLine('/cancel_xoxo', 'Alternate XOXO cancel command'),
+    commandLine('/xoxo_stats', 'View XOXO stats'),
+    commandLine('/rps', 'Play Rock Paper Scissors'),
+    commandLine('/rps_stats', 'View RPS stats'),
+    commandLine('/rps_cancel', 'Cancel the RPS lobby'),
     backBtn(`hp:game${sfx(w)}`),
   ];
 }
