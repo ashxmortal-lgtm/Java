@@ -1,23 +1,38 @@
-name: Deploy Telegram Bot
+name: Deploy Telegram Bot (LEGACY combined app — disabled)
+
+# CUTOVER: Frozen Blooded was split into two independent bots:
+#   - exfrozen-study/    → @exfrozen_bot   (app8868570312, secret TGCLOUD_TOKEN_EXFROZEN)
+#   - missfrozen-gaming/ → @missfrozen_bot (app8888370613, secret TGCLOUD_TOKEN_MISSFROZEN)
+# Each has its own workflow inside its folder (active once that folder is its
+# own repo/root). This legacy combined workflow no longer runs on push/PR, so
+# the old combined application can never be deployed by accident. It remains
+# available for a deliberate manual rollback only.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      confirm_legacy_deploy:
+        description: 'Type DEPLOY-LEGACY-COMBINED to confirm deploying the OLD combined bot'
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: tgcloud-deploy
+  group: tgcloud-deploy-legacy
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-24.04
     steps:
+      - name: Require explicit legacy confirmation
+        if: inputs.confirm_legacy_deploy != 'DEPLOY-LEGACY-COMBINED'
+        run: |
+          echo "::error::Legacy combined deploy not confirmed. Aborting."
+          exit 1
+
       - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v7
@@ -30,17 +45,13 @@ jobs:
       - name: Validate syntax, imports and run test suite
         run: npm run validate
 
-      # Fetch remote cloud revision metadata to check for concurrency conflicts.
-      # Note: tgcloud fetch updates local revision records and does not merge or overwrite repository working files.
       - name: Sync cloud revision metadata
-        if: github.event_name != 'pull_request'
         run: npx tgcloud fetch
         env:
           TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
 
-      # Push changes to TGCloud. Never pass --force so remote revision conflicts safely abort deployment.
+      # Never pass --force so remote revision conflicts safely abort deployment.
       - name: Deploy to TGCloud
-        if: github.event_name != 'pull_request'
         run: npx tgcloud push
         env:
           TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
